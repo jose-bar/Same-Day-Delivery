@@ -10,16 +10,16 @@ public class RobotController : MonoBehaviour
     public float jumpForce = 8f;
 
     [Header("Ground Check")]
-    public float groundCheckDistance = 0.6f;
+    public float groundCheckDistance = 0.5f;
 
     [Header("Body Settings")]
     public Transform bodySprite;
     public Vector2 bodyColliderSize = new Vector2(0.8f, 1.2f);
 
     [Header("Crouch Settings")]
-    public float crouchAmount = 0.3f;
+    public float crouchAmount = 0.8f;
     public float crouchSpeed = 5f;
-    public float crouchColliderReduction = 0.5f;
+    public float crouchColliderReduction = 0.6f; // How much to reduce collider height when crouching
 
     private Rigidbody2D rb;
     private CircleCollider2D wheelCollider;
