@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor.MPE;
 using UnityEngine;
 
 public class RobotController : MonoBehaviour
@@ -7,6 +9,17 @@ public class RobotController : MonoBehaviour
     [Header("Movement Settings")]
     public float moveSpeed = 5f;
     public float jumpForce = 8f;
+    public float hAcceleration = .5f; // Acceleration on movement key press
+    public float hInitialBoost = 1f; // movement should have some instant velocity right?
+    public float hFriction = .5f;
+    public float maxSpeed = 5f;
+
+    
+    // Weight and wieght adjacent
+    public float totaweight = 10f;
+    public float torqueR;
+    public float torqueL;
+
 
     [Header("Ground Check")]
     public float groundCheckDistance = 0.6f;
@@ -124,7 +137,7 @@ public class RobotController : MonoBehaviour
     void FixedUpdate()
     {
         // Simple movement
-        rb.velocity = new Vector2(horizontalInput * moveSpeed, rb.velocity.y);
+        PlayerMovementH();
 
         // Check if grounded using raycasts
         CheckGrounded();
@@ -237,6 +250,35 @@ public class RobotController : MonoBehaviour
                 }
             }
         }
+    }
+
+    void PlayerMovementH()
+    {
+        float h_velocity = 0;
+        
+        
+        
+        if (horizontalInput != 0)
+        {
+            int momentumDir = Math.Sign(h_velocity);
+
+            // Adds some instant velocity
+            if (h_velocity == 0 || momentumDir != horizontalInput)
+            { 
+                h_velocity = hInitialBoost * horizontalInput;
+            } 
+            
+            // Applying accearation on movement key press
+            if (rb.velocity.y != maxSpeed)
+            {
+                h_velocity *= hAcceleration;
+            }
+            rb.velocity = new Vector2(horizontalInput * moveSpeed, rb.velocity.y);
+
+
+        }
+           
+        
     }
 
 }
