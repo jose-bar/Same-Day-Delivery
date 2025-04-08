@@ -1,6 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.PlayerLoop;
 
 public class RobotController : MonoBehaviour
 {
@@ -8,10 +11,12 @@ public class RobotController : MonoBehaviour
     public float moveSpeed = 5f;
     public float jumpForce = 8f;
     public float hAcceleration = .5f; // Acceleration on movement key press
-    public float hInitialBoost = 1f; // movement should have some instant velocity right?
-    public float hFriction = .5f;
+    public float hFriction = 2f;
     public float maxSpeed = 5f;
-
+    
+    public float totalWeight = 0;
+    
+    
     [Header("Ground Check")]
     public float groundCheckDistance = 0.6f;
 
@@ -118,6 +123,9 @@ public class RobotController : MonoBehaviour
     {
         // Get input
         horizontalInput = Input.GetAxisRaw("Horizontal");
+        
+        // debug message
+        if (Input.GetKeyDown(KeyCode.P)) {Debug.Log("curent input direction: " + horizontalInput + ". current speed: " + rb.velocity.x);}
 
         // Jump when space is pressed and grounded
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
@@ -127,7 +135,9 @@ public class RobotController : MonoBehaviour
             Debug.Log("Jump!");
             isGrounded = false; // Immediately set to false to prevent double jumps
         }
+        
 
+        
         // Handle crouching
         HandleCrouch();
 
@@ -144,12 +154,16 @@ public class RobotController : MonoBehaviour
 
             StartCoroutine(AttachCooldown()); // Prevents multiple toggles from one press
         }
+
+        
     }
 
     void FixedUpdate()
     {
         // Simple movement
-        rb.velocity = new Vector2(horizontalInput * moveSpeed, rb.velocity.y);
+        PlayerMovementH();
+
+        
 
         // Check if grounded using raycasts
         CheckGrounded();
@@ -301,8 +315,37 @@ public class RobotController : MonoBehaviour
         canToggleAttach = true;
     }
 
-    
-
+    void PlayerMovementH()
+    {
+        float h_velocity = 0;
+        int momentumDir = Math.Sign(rb.velocity.x);
+        float h_speed = Math.Abs(rb.velocity.x);
+        if (horizontalInput != 0)
+        {
+            h_velocity = (hAcceleration / (1 + totalWeight));
+            if (h_speed + h_velocity >= maxSpeed / (1 + totalWeight)){
+               h_velocity = 0;
+               rb.velocity = new Vector2(maxSpeed / (1 + totalWeight) * horizontalInput, rb.velocity.y);
+            }
+            else
+            {
+                rb.velocity = new Vector2(rb.velocity.x + (h_velocity * horizontalInput), rb.velocity.y);
+            }
+        }
+        else
+        {
+            h_velocity = momentumDir * hFriction * (1 + totalWeight);
+            if (h_speed - (momentumDir * h_velocity) > 0)
+            {
+                rb.velocity = new Vector2(rb.velocity.x - h_velocity, rb.velocity.y);
+            }
+            else
+            {
+                h_velocity =  0;
+                rb.velocity = new Vector2(0, rb.velocity.y);
+            }
+        }
+    }
 }
 
 
