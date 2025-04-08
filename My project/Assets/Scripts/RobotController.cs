@@ -32,6 +32,13 @@ public class RobotController : MonoBehaviour
     private Vector2 originalBodyColliderSize;
     private Vector2 originalBodyColliderOffset;
 
+    [Header("Item Interaction")]
+    public Transform attachmentPoint; // Assign a point to the right of the robot in the inspector
+    public float attachRange = 1f;
+    public LayerMask itemLayer;
+    private GameObject attachedItem = null;
+    private bool canToggleAttach = true;
+
     void Start()
     {
         // Get rigidbody
@@ -119,6 +126,20 @@ public class RobotController : MonoBehaviour
 
         // Handle crouching
         HandleCrouch();
+
+        if (Input.GetKeyDown(KeyCode.E) && canToggleAttach)
+        {
+            if (attachedItem == null)
+            {
+                TryAttachItem();
+            }
+            else
+            {
+                DetachItem();
+            }
+
+            StartCoroutine(AttachCooldown()); // Prevents multiple toggles from one press
+        }
     }
 
     void FixedUpdate()
@@ -239,4 +260,43 @@ public class RobotController : MonoBehaviour
         }
     }
 
+        void TryAttachItem()
+    {
+        Collider2D item = Physics2D.OverlapCircle(attachmentPoint.position, attachRange, itemLayer);
+        if (item != null && attachedItem == null)
+        {
+            attachedItem = item.gameObject;
+            attachedItem.transform.SetParent(attachmentPoint);
+            attachedItem.transform.localPosition = Vector3.zero;
+
+            Rigidbody2D rb = attachedItem.GetComponent<Rigidbody2D>();
+            if (rb != null) rb.simulated = false;
+
+            Debug.Log("Item attached!");
+        }
+    }
+
+    void DetachItem()
+    {
+        if (attachedItem != null)
+        {
+            attachedItem.transform.SetParent(null);
+
+            Rigidbody2D rb = attachedItem.GetComponent<Rigidbody2D>();
+            if (rb != null) rb.simulated = true;
+
+            attachedItem = null;
+            Debug.Log("Item detached!");
+        }
+    }
+
+    IEnumerator AttachCooldown()
+    {
+        canToggleAttach = false;
+        yield return new WaitForSeconds(0.2f); // Small buffer so holding E doesn't spam
+        canToggleAttach = true;
+    }
+
 }
+
+
