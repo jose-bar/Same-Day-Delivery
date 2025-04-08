@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class RobotController : MonoBehaviour
@@ -12,8 +13,8 @@ public class RobotController : MonoBehaviour
     public float groundCheckDistance = 0.5f;
 
     [Header("Body Settings")]
-    public Transform bodySprite; // Reference to the body sprite
-    public Vector2 bodyColliderSize = new Vector2(0.8f, 1.2f); // Default body collider size
+    public Transform bodySprite;
+    public Vector2 bodyColliderSize = new Vector2(0.8f, 1.2f);
 
     [Header("Crouch Settings")]
     public float crouchAmount = 0.8f;
@@ -26,32 +27,33 @@ public class RobotController : MonoBehaviour
     private bool isGrounded;
     private float horizontalInput;
 
-    // Body sprite references
     private bool isCrouching = false;
     private Vector3 originalBodyPosition;
     private Vector2 originalBodyColliderSize;
     private Vector2 originalBodyColliderOffset;
 
-    [Header("Item Interaction")]
-    public Transform attachmentPoint; // Assign a point to the right of the robot in the inspector
+    [Header("Attachment Points")]
+    public Transform rightAttachPoint;
+    public Transform leftAttachPoint;
+    public Transform topAttachPoint;
     public float attachRange = 1f;
     public LayerMask itemLayer;
-    private GameObject attachedItem = null;
+
+    [Header("Attached Packages (Per Side)")]
+    private List<GameObject> rightPackages = new List<GameObject>();
+    private List<GameObject> leftPackages = new List<GameObject>();
+    private List<GameObject> topPackages = new List<GameObject>();
+
     private bool canToggleAttach = true;
 
     void Start()
     {
-        // Get rigidbody
         rb = GetComponent<Rigidbody2D>();
-
-        // Get circle collider (for the wheel)
         wheelCollider = GetComponent<CircleCollider2D>();
-        if (wheelCollider == null)
-        {
-            Debug.LogError("No CircleCollider2D found on the robot!");
-        }
 
-        // Find body sprite if not assigned
+        if (wheelCollider == null)
+            Debug.LogError("No CircleCollider2D found on the robot!");
+
         if (bodySprite == null)
         {
             bodySprite = transform.Find("BodySprite");
@@ -59,8 +61,7 @@ public class RobotController : MonoBehaviour
             {
                 foreach (Transform child in transform)
                 {
-                    if (child.GetComponent<SpriteRenderer>() != null &&
-                        child.name != "WheelSprite")
+                    if (child.GetComponent<SpriteRenderer>() != null && child.name != "WheelSprite")
                     {
                         bodySprite = child;
                         break;
@@ -72,9 +73,6 @@ public class RobotController : MonoBehaviour
         if (bodySprite != null)
         {
             originalBodyPosition = bodySprite.localPosition;
-            Debug.Log("Found body sprite: " + bodySprite.name);
-
-            // Set up the body collider
             SetupBodyCollider();
         }
         else
@@ -82,75 +80,59 @@ public class RobotController : MonoBehaviour
             Debug.LogWarning("Body sprite not found!");
         }
 
-        // Lock rotation of the main object to keep body upright
         rb.constraints = RigidbodyConstraints2D.FreezeRotation;
-
-        Debug.Log("Robot initialized at Y: " + transform.position.y);
     }
 
     void SetupBodyCollider()
     {
-        // Check if body already has a collider
         bodyCollider = bodySprite.GetComponent<BoxCollider2D>();
 
         if (bodyCollider == null)
         {
-            // Add a box collider to the body
             bodyCollider = bodySprite.gameObject.AddComponent<BoxCollider2D>();
             bodyCollider.size = bodyColliderSize;
-
-            // Position the collider in the center of the body
             bodyCollider.offset = Vector2.zero;
-
-            Debug.Log("Added BoxCollider2D to body sprite");
         }
 
-        // Store original values
         originalBodyColliderSize = bodyCollider.size;
         originalBodyColliderOffset = bodyCollider.offset;
     }
 
     void Update()
     {
-        // Get input
         horizontalInput = Input.GetAxisRaw("Horizontal");
 
-        // Jump when space is pressed and grounded
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
-            rb.velocity = new Vector2(rb.velocity.x, 0); // Reset any downward velocity
+            rb.velocity = new Vector2(rb.velocity.x, 0);
             rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
-            Debug.Log("Jump!");
-            isGrounded = false; // Immediately set to false to prevent double jumps
+            isGrounded = false;
         }
 
-        // Handle crouching
         HandleCrouch();
 
-        if (Input.GetKeyDown(KeyCode.E) && canToggleAttach)
+        if (canToggleAttach)
         {
-            if (attachedItem == null)
+            if (Input.GetKeyDown(KeyCode.RightArrow))
             {
-                TryAttachItem();
+                ToggleAttachment(rightPackages, rightAttachPoint);
             }
-            else
+            else if (Input.GetKeyDown(KeyCode.LeftArrow))
             {
-                DetachItem();
+                ToggleAttachment(leftPackages, leftAttachPoint);
             }
-
-            StartCoroutine(AttachCooldown()); // Prevents multiple toggles from one press
+            else if (Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                ToggleAttachment(topPackages, topAttachPoint);
+            }
         }
     }
 
     void FixedUpdate()
     {
-        // Simple movement
         rb.velocity = new Vector2(horizontalInput * moveSpeed, rb.velocity.y);
-
-        // Check if grounded using raycasts
         CheckGrounded();
 
-        // Keep body upright if transform rotation is unlocked
         if (bodySprite != null)
         {
             bodySprite.rotation = Quaternion.identity;
@@ -161,32 +143,15 @@ public class RobotController : MonoBehaviour
     {
         if (wheelCollider == null) return;
 
-        // Get the world position of the bottom of the circle
         Vector2 circleBottom = (Vector2)transform.position - new Vector2(0, wheelCollider.radius);
 
-        // Cast a ray downward to check for ground
-        RaycastHit2D hit = Physics2D.Raycast(
-            circleBottom,
-            Vector2.down,
-            groundCheckDistance
-        );
+        RaycastHit2D hit = Physics2D.Raycast(circleBottom, Vector2.down, groundCheckDistance);
+        RaycastHit2D hitLeft = Physics2D.Raycast(circleBottom - new Vector2(wheelCollider.radius * 0.5f, 0), Vector2.down, groundCheckDistance);
+        RaycastHit2D hitRight = Physics2D.Raycast(circleBottom + new Vector2(wheelCollider.radius * 0.5f, 0), Vector2.down, groundCheckDistance);
 
-        RaycastHit2D hitLeft = Physics2D.Raycast(
-            circleBottom - new Vector2(wheelCollider.radius * 0.5f, 0),
-            Vector2.down,
-            groundCheckDistance
-        );
-
-        RaycastHit2D hitRight = Physics2D.Raycast(
-            circleBottom + new Vector2(wheelCollider.radius * 0.5f, 0),
-            Vector2.down,
-            groundCheckDistance
-        );
-
-        // Check if any of the rays hit something that isn't the player
         isGrounded = (hit.collider != null && hit.collider.gameObject != gameObject && hit.collider.gameObject != bodySprite.gameObject) ||
-                    (hitLeft.collider != null && hitLeft.collider.gameObject != gameObject && hitLeft.collider.gameObject != bodySprite.gameObject) ||
-                    (hitRight.collider != null && hitRight.collider.gameObject != gameObject && hitRight.collider.gameObject != bodySprite.gameObject);
+                     (hitLeft.collider != null && hitLeft.collider.gameObject != gameObject && hitLeft.collider.gameObject != bodySprite.gameObject) ||
+                     (hitRight.collider != null && hitRight.collider.gameObject != gameObject && hitRight.collider.gameObject != bodySprite.gameObject);
     }
 
     void OnCollisionStay2D(Collision2D collision)
@@ -196,7 +161,6 @@ public class RobotController : MonoBehaviour
             Vector2 contact = collision.GetContact(i).point;
             Vector2 center = transform.position;
 
-            // If contact below center of circle, is ground
             if (contact.y < center.y - wheelCollider.radius * 0.8f)
             {
                 isGrounded = true;
@@ -211,22 +175,16 @@ public class RobotController : MonoBehaviour
         {
             if (Input.GetKey(KeyCode.S))
             {
-                // Crouch down
                 isCrouching = true;
-
-                // Move body sprite down
                 Vector3 targetPos = new Vector3(originalBodyPosition.x, originalBodyPosition.y - crouchAmount, originalBodyPosition.z);
                 bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, targetPos, Time.deltaTime * crouchSpeed);
 
-                // Adjust body collider if it exists
                 if (bodyCollider != null)
                 {
-                    // Reduce height of collider
                     Vector2 crouchSize = originalBodyColliderSize;
                     crouchSize.y *= crouchColliderReduction;
                     bodyCollider.size = crouchSize;
 
-                    // Adjust offset to keep the top of the collider in the same place
                     Vector2 crouchOffset = originalBodyColliderOffset;
                     crouchOffset.y -= (originalBodyColliderSize.y - crouchSize.y) / 2;
                     bodyCollider.offset = crouchOffset;
@@ -234,17 +192,14 @@ public class RobotController : MonoBehaviour
             }
             else if (isCrouching)
             {
-                // Return to normal position
                 bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
 
-                // Restore collider if it exists
                 if (bodyCollider != null)
                 {
                     bodyCollider.size = Vector2.Lerp(bodyCollider.size, originalBodyColliderSize, Time.deltaTime * crouchSpeed);
                     bodyCollider.offset = Vector2.Lerp(bodyCollider.offset, originalBodyColliderOffset, Time.deltaTime * crouchSpeed);
                 }
 
-                // Check if we're close enough to original position
                 if (Vector3.Distance(bodySprite.localPosition, originalBodyPosition) < 0.01f)
                 {
                     isCrouching = false;
@@ -260,43 +215,51 @@ public class RobotController : MonoBehaviour
         }
     }
 
-        void TryAttachItem()
+    void ToggleAttachment(List<GameObject> packageList, Transform attachPoint)
     {
-        Collider2D item = Physics2D.OverlapCircle(attachmentPoint.position, attachRange, itemLayer);
-        if (item != null && attachedItem == null)
+        Collider2D item = Physics2D.OverlapCircle(attachPoint.position, attachRange, itemLayer);
+
+        if (item != null && !packageList.Contains(item.gameObject))
         {
-            attachedItem = item.gameObject;
-            attachedItem.transform.SetParent(attachmentPoint);
-            attachedItem.transform.localPosition = Vector3.zero;
-
-            Rigidbody2D rb = attachedItem.GetComponent<Rigidbody2D>();
-            if (rb != null) rb.simulated = false;
-
-            Debug.Log("Item attached!");
+            AttachItem(item.gameObject, attachPoint, packageList);
         }
+        else if (packageList.Count > 0)
+        {
+            DetachLastItem(packageList);
+        }
+
+        StartCoroutine(AttachCooldown());
     }
 
-    void DetachItem()
+    void AttachItem(GameObject item, Transform attachPoint, List<GameObject> packageList)
     {
-        if (attachedItem != null)
-        {
-            attachedItem.transform.SetParent(null);
+        item.transform.SetParent(attachPoint);
+        item.transform.localPosition = new Vector3(0, packageList.Count * 0.5f, 0);
 
-            Rigidbody2D rb = attachedItem.GetComponent<Rigidbody2D>();
-            if (rb != null) rb.simulated = true;
+        Rigidbody2D rb = item.GetComponent<Rigidbody2D>();
+        if (rb != null) rb.simulated = false;
 
-            attachedItem = null;
-            Debug.Log("Item detached!");
-        }
+        packageList.Add(item);
+        Debug.Log($"Item attached to {attachPoint.name} | Total: {packageList.Count}");
+    }
+
+    void DetachLastItem(List<GameObject> packageList)
+    {
+        GameObject last = packageList.Last();
+        packageList.RemoveAt(packageList.Count - 1);
+
+        last.transform.SetParent(null);
+
+        Rigidbody2D rb = last.GetComponent<Rigidbody2D>();
+        if (rb != null) rb.simulated = true;
+
+        Debug.Log($"Item detached | Remaining: {packageList.Count}");
     }
 
     IEnumerator AttachCooldown()
     {
         canToggleAttach = false;
-        yield return new WaitForSeconds(0.2f); // Small buffer so holding E doesn't spam
+        yield return new WaitForSeconds(0.2f);
         canToggleAttach = true;
     }
-
 }
-
-
