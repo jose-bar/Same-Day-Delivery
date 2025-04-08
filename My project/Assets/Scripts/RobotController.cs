@@ -7,6 +7,10 @@ public class RobotController : MonoBehaviour
     [Header("Movement Settings")]
     public float moveSpeed = 5f;
     public float jumpForce = 8f;
+    public float hAcceleration = .5f; // Acceleration on movement key press
+    public float hInitialBoost = 1f; // movement should have some instant velocity right?
+    public float hFriction = .5f;
+    public float maxSpeed = 5f;
 
     [Header("Ground Check")]
     public float groundCheckDistance = 0.6f;
@@ -296,6 +300,8 @@ public class RobotController : MonoBehaviour
         yield return new WaitForSeconds(0.2f); // Small buffer so holding E doesn't spam
         canToggleAttach = true;
     }
+
+    
 
 }
 
