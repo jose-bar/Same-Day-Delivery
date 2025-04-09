@@ -14,6 +14,9 @@ public class RobotController : MonoBehaviour
 
     [Header("Body Settings")]
     public Transform bodySprite;
+    public Transform bodyMiddle;
+    public Transform wheelSprite;
+    private Vector3 originalBodyMiddlePosition;
     public Vector2 bodyColliderSize = new Vector2(0.8f, 1.2f);
 
     [Header("Crouch Settings")]
@@ -81,6 +84,11 @@ public class RobotController : MonoBehaviour
         }
 
         rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+
+        if (bodyMiddle != null) //store original position for body middle:
+        {
+            originalBodyMiddlePosition = bodyMiddle.localPosition;
+        }
     }
 
     void SetupBodyCollider()
@@ -137,6 +145,13 @@ public class RobotController : MonoBehaviour
         {
             bodySprite.rotation = Quaternion.identity;
         }
+
+        //wheel rotation
+        if (wheelSprite != null)
+        {
+            float rotationAmount = -rb.velocity.x * 360f * Time.fixedDeltaTime;
+            wheelSprite.Rotate(Vector3.forward, rotationAmount);
+        }
     }
 
     void CheckGrounded()
@@ -170,50 +185,62 @@ public class RobotController : MonoBehaviour
     }
 
     void HandleCrouch()
+{
+    if (bodySprite != null)
     {
-        if (bodySprite != null)
+        if (Input.GetKey(KeyCode.S))
         {
-            if (Input.GetKey(KeyCode.S))
+            isCrouching = true;
+            Vector3 targetPos = new Vector3(originalBodyPosition.x, originalBodyPosition.y - crouchAmount, originalBodyPosition.z);
+            bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, targetPos, Time.deltaTime * crouchSpeed);
+
+            if (bodyMiddle != null)
             {
-                isCrouching = true;
-                Vector3 targetPos = new Vector3(originalBodyPosition.x, originalBodyPosition.y - crouchAmount, originalBodyPosition.z);
-                bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, targetPos, Time.deltaTime * crouchSpeed);
-
-                if (bodyCollider != null)
-                {
-                    Vector2 crouchSize = originalBodyColliderSize;
-                    crouchSize.y *= crouchColliderReduction;
-                    bodyCollider.size = crouchSize;
-
-                    Vector2 crouchOffset = originalBodyColliderOffset;
-                    crouchOffset.y -= (originalBodyColliderSize.y - crouchSize.y) / 2;
-                    bodyCollider.offset = crouchOffset;
-                }
+                Vector3 middleTargetPos = new Vector3(originalBodyMiddlePosition.x, originalBodyMiddlePosition.y - crouchAmount, originalBodyMiddlePosition.z);
+                bodyMiddle.localPosition = Vector3.Lerp(bodyMiddle.localPosition, middleTargetPos, Time.deltaTime * crouchSpeed);
             }
-            else if (isCrouching)
+
+            if (bodyCollider != null)
             {
-                bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
+                Vector2 crouchSize = originalBodyColliderSize;
+                crouchSize.y *= crouchColliderReduction;
+                bodyCollider.size = crouchSize;
+
+                Vector2 crouchOffset = originalBodyColliderOffset;
+                crouchOffset.y -= (originalBodyColliderSize.y - crouchSize.y) / 2;
+                bodyCollider.offset = crouchOffset;
+            }
+        }
+        else if (isCrouching)
+        {
+            bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
+
+            if (bodyMiddle != null)
+            {
+                bodyMiddle.localPosition = Vector3.Lerp(bodyMiddle.localPosition, originalBodyMiddlePosition, Time.deltaTime * crouchSpeed);
+            }
+
+            if (bodyCollider != null)
+            {
+                bodyCollider.size = Vector2.Lerp(bodyCollider.size, originalBodyColliderSize, Time.deltaTime * crouchSpeed);
+                bodyCollider.offset = Vector2.Lerp(bodyCollider.offset, originalBodyColliderOffset, Time.deltaTime * crouchSpeed);
+            }
+
+            if (Vector3.Distance(bodySprite.localPosition, originalBodyPosition) < 0.01f)
+            {
+                isCrouching = false;
+                bodySprite.localPosition = originalBodyPosition;
+                if (bodyMiddle != null) bodyMiddle.localPosition = originalBodyMiddlePosition;
 
                 if (bodyCollider != null)
                 {
-                    bodyCollider.size = Vector2.Lerp(bodyCollider.size, originalBodyColliderSize, Time.deltaTime * crouchSpeed);
-                    bodyCollider.offset = Vector2.Lerp(bodyCollider.offset, originalBodyColliderOffset, Time.deltaTime * crouchSpeed);
-                }
-
-                if (Vector3.Distance(bodySprite.localPosition, originalBodyPosition) < 0.01f)
-                {
-                    isCrouching = false;
-                    bodySprite.localPosition = originalBodyPosition;
-
-                    if (bodyCollider != null)
-                    {
-                        bodyCollider.size = originalBodyColliderSize;
-                        bodyCollider.offset = originalBodyColliderOffset;
-                    }
+                    bodyCollider.size = originalBodyColliderSize;
+                    bodyCollider.offset = originalBodyColliderOffset;
                 }
             }
         }
     }
+}
 
     void ToggleAttachment(List<GameObject> packageList, Transform attachPoint)
     {
