@@ -43,12 +43,11 @@ public class RobotController : MonoBehaviour
     private Vector2 originalBodyColliderSize;
     private Vector2 originalBodyColliderOffset;
 
-    [Header("Attachment Points")]
-    public Transform rightAttachPoint;
-    public Transform leftAttachPoint;
-    public Transform topAttachPoint;
-    public float attachRange = 1f;
+    [Header("Attach Detection")]
+    public float attachRange = 0.5f;
     public LayerMask itemLayer;
+    private bool hasPackageInRange = false;
+
 
     [Header("Attached Packages (Per Side)")]
     private List<GameObject> rightPackages = new List<GameObject>();
@@ -57,13 +56,15 @@ public class RobotController : MonoBehaviour
 
     private bool canToggleAttach = true;
 
-    [Header("Attach Detection Box")]
+   [Header("Attachment Detection Range")]
+    public Vector2 detectionPadding = new Vector2(0.5f, 0.5f); // X and Y separately
+
+
+
+    [Header("Attachment range Box")]
+    
     public Vector2 sideDetectSize = new Vector2(1.2f, 2.0f);
     public Vector2 topDetectSize = new Vector2(1.0f, 1.0f);
-
-    [Header("Attach Box Offset (from attach point)")]
-    public Vector2 sideDetectOffset = new Vector2(0f, -1.0f);
-    public Vector2 topDetectOffset = new Vector2(0f, -0.5f);
 
     void Start()
     {
@@ -125,7 +126,11 @@ public class RobotController : MonoBehaviour
 
     void Update()
     {
-        horizontalInput = Input.GetAxisRaw("Horizontal");
+        horizontalInput = 0f;
+
+        if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
+        if (Input.GetKey(KeyCode.D)) horizontalInput = 1f;
+
 
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
@@ -139,18 +144,13 @@ public class RobotController : MonoBehaviour
         if (canToggleAttach)
         {
             if (Input.GetKeyDown(KeyCode.RightArrow))
-            {
-                ToggleAttachment(rightPackages, rightAttachPoint);
-            }
+                ToggleAttachment(rightPackages, AttachmentSide.Right);
             else if (Input.GetKeyDown(KeyCode.LeftArrow))
-            {
-                ToggleAttachment(leftPackages, leftAttachPoint);
-            }
+                ToggleAttachment(leftPackages, AttachmentSide.Left);
             else if (Input.GetKeyDown(KeyCode.UpArrow))
-            {
-                ToggleAttachment(topPackages, topAttachPoint);
-            }
+                ToggleAttachment(topPackages, AttachmentSide.Top);
         }
+
     }
 
     void FixedUpdate()
@@ -264,48 +264,91 @@ public class RobotController : MonoBehaviour
         }
     }
 }
-    void ToggleAttachment(List<GameObject> packageList, Transform attachPoint)
+
+Vector2 GetAttachRangeCenter(AttachmentSide side)
+{
+    Vector2 origin = bodySprite != null ? (Vector2)bodySprite.position : (Vector2)transform.position;
+
+    return side switch
     {
-        Vector2 size, offset;
+        AttachmentSide.Right => origin + new Vector2(attachRange, 0),
+        AttachmentSide.Left => origin + new Vector2(-attachRange, 0),
+        AttachmentSide.Top => origin + new Vector2(0, attachRange),
+        _ => origin
+    };
+}
 
-        if (attachPoint == topAttachPoint)
-        {
-            size = topDetectSize;
-            offset = topDetectOffset;
-        }
-        else
-        {
-            size = sideDetectSize;
-            offset = sideDetectOffset;
-        }
+    public enum AttachmentSide { Right, Left, Top }
 
-        Vector2 boxCenter = (Vector2)attachPoint.position + offset;
+       Bounds GetRobotDetectionBounds()
+{
+    Collider2D[] colliders = GetComponentsInChildren<Collider2D>();
+    if (colliders.Length == 0) return new Bounds(transform.position, Vector3.one * 0.1f);
 
-        Collider2D item = Physics2D.OverlapBox(boxCenter, size, 0f, itemLayer);
+    Bounds bounds = colliders[0].bounds;
+    for (int i = 1; i < colliders.Length; i++)
+        bounds.Encapsulate(colliders[i].bounds);
 
-        if (item != null && !packageList.Contains(item.gameObject))
-        {
-            AttachItem(item.gameObject, attachPoint, packageList);
-        }
-        else if (packageList.Count > 0)
-        {
-            DetachLastItem(packageList);
-        }
+    bounds.Expand(new Vector3(detectionPadding.x * 2f, detectionPadding.y * 2f, 0f));
+    return bounds;
+}
 
-        StartCoroutine(AttachCooldown());
+
+
+
+   void ToggleAttachment(List<GameObject> packageList, AttachmentSide side)
+{
+    if (packageList.Count >= 1)
+    {
+        DetachLastItem(packageList);
+        return;
     }
 
-    void AttachItem(GameObject item, Transform attachPoint, List<GameObject> packageList)
+    Bounds detectionBounds = GetRobotDetectionBounds();
+    Collider2D[] hits = Physics2D.OverlapBoxAll(detectionBounds.center, detectionBounds.size, 0f, itemLayer);
+
+    hasPackageInRange = hits.Length > 0;
+
+    foreach (Collider2D col in hits)
     {
-        item.transform.SetParent(attachPoint);
-        item.transform.localPosition = new Vector3(0, packageList.Count * 0.5f, 0);
+        GameObject item = col.gameObject;
+
+        if (!packageList.Contains(item))
+        {
+            AttachItem(item, GetAttachAttachPosition(side), packageList);
+            break; // only one
+        }
+    }
+
+    StartCoroutine(AttachCooldown());
+}
+
+
+
+
+Vector2 GetAttachBoxSize(AttachmentSide side)
+{
+    return side switch
+    {
+        AttachmentSide.Top => topDetectSize,
+        _ => sideDetectSize
+    };
+}
+
+
+
+    void AttachItem(GameObject item, Vector2 attachCenter, List<GameObject> packageList)
+    {
+        item.transform.position = attachCenter;
+        item.transform.SetParent(transform);
 
         Rigidbody2D rb = item.GetComponent<Rigidbody2D>();
         if (rb != null) rb.simulated = false;
 
         packageList.Add(item);
-        Debug.Log($"Item attached to {attachPoint.name} | Total: {packageList.Count}");
+        Debug.Log($"Item attached at position {attachCenter}");
     }
+
 
     void DetachLastItem(List<GameObject> packageList)
     {
@@ -328,28 +371,43 @@ public class RobotController : MonoBehaviour
     }
 
 
+Vector2 GetAttachAttachPosition(AttachmentSide side)
+{
+    Vector2 basePos = bodySprite != null ? (Vector2)bodySprite.position : (Vector2)transform.position;
+    Bounds bounds = bodyCollider != null ? bodyCollider.bounds : new Bounds(transform.position, Vector3.one);
+    Vector2 extents = bounds.extents;
+
+    return side switch
+    {
+        AttachmentSide.Right => basePos + new Vector2(extents.x * 2f, 0),
+        AttachmentSide.Left => basePos - new Vector2(extents.x * 2f, 0),
+        AttachmentSide.Top => basePos + new Vector2(0, extents.y * 2f),
+        _ => basePos
+    };
+}
+
+
+
     void OnDrawGizmosSelected()
     {
-        if (rightAttachPoint != null)
+        Bounds bounds = GetRobotDetectionBounds();
+        float markerSize = 0.3f;
+
+        // Detection zone glow
+        if (hasPackageInRange)
         {
-            Gizmos.color = Color.red;
-            Vector3 center = rightAttachPoint.position + (Vector3)sideDetectOffset;
-            Gizmos.DrawWireCube(center, sideDetectSize);
+            Gizmos.color = new Color(0f, 1f, 0f, 0.2f); // transparent green
+            Gizmos.DrawCube(bounds.center, bounds.size);
         }
 
-        if (leftAttachPoint != null)
-        {
-            Gizmos.color = Color.green;
-            Vector3 center = leftAttachPoint.position + (Vector3)sideDetectOffset;
-            Gizmos.DrawWireCube(center, sideDetectSize);
-        }
+        Gizmos.color = new Color(1f, 0.5f, 0.5f); // outline
+        Gizmos.DrawWireCube(bounds.center, bounds.size);
 
-        if (topAttachPoint != null)
-        {
-            Gizmos.color = Color.blue;
-            Vector3 center = topAttachPoint.position + (Vector3)topDetectOffset;
-            Gizmos.DrawWireCube(center, topDetectSize);
-        }
+        // Attach points
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireCube(GetAttachAttachPosition(AttachmentSide.Right), Vector3.one * markerSize);
+        Gizmos.DrawWireCube(GetAttachAttachPosition(AttachmentSide.Left), Vector3.one * markerSize);
+        Gizmos.DrawWireCube(GetAttachAttachPosition(AttachmentSide.Top), Vector3.one * markerSize);
     }
 
 }
