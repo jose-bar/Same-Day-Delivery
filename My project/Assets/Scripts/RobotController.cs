@@ -57,6 +57,14 @@ public class RobotController : MonoBehaviour
 
     private bool canToggleAttach = true;
 
+    [Header("Attach Detection Box")]
+    public Vector2 sideDetectSize = new Vector2(1.2f, 2.0f);
+    public Vector2 topDetectSize = new Vector2(1.0f, 1.0f);
+
+    [Header("Attach Box Offset (from attach point)")]
+    public Vector2 sideDetectOffset = new Vector2(0f, -1.0f);
+    public Vector2 topDetectOffset = new Vector2(0f, -0.5f);
+
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -258,7 +266,22 @@ public class RobotController : MonoBehaviour
 }
     void ToggleAttachment(List<GameObject> packageList, Transform attachPoint)
     {
-        Collider2D item = Physics2D.OverlapCircle(attachPoint.position, attachRange, itemLayer);
+        Vector2 size, offset;
+
+        if (attachPoint == topAttachPoint)
+        {
+            size = topDetectSize;
+            offset = topDetectOffset;
+        }
+        else
+        {
+            size = sideDetectSize;
+            offset = sideDetectOffset;
+        }
+
+        Vector2 boxCenter = (Vector2)attachPoint.position + offset;
+
+        Collider2D item = Physics2D.OverlapBox(boxCenter, size, 0f, itemLayer);
 
         if (item != null && !packageList.Contains(item.gameObject))
         {
@@ -303,4 +326,32 @@ public class RobotController : MonoBehaviour
         yield return new WaitForSeconds(0.2f);
         canToggleAttach = true;
     }
+
+
+    void OnDrawGizmosSelected()
+    {
+        if (rightAttachPoint != null)
+        {
+            Gizmos.color = Color.red;
+            Vector3 center = rightAttachPoint.position + (Vector3)sideDetectOffset;
+            Gizmos.DrawWireCube(center, sideDetectSize);
+        }
+
+        if (leftAttachPoint != null)
+        {
+            Gizmos.color = Color.green;
+            Vector3 center = leftAttachPoint.position + (Vector3)sideDetectOffset;
+            Gizmos.DrawWireCube(center, sideDetectSize);
+        }
+
+        if (topAttachPoint != null)
+        {
+            Gizmos.color = Color.blue;
+            Vector3 center = topAttachPoint.position + (Vector3)topDetectOffset;
+            Gizmos.DrawWireCube(center, topDetectSize);
+        }
+    }
+
 }
+
+
