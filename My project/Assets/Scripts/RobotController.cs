@@ -24,6 +24,8 @@ public class RobotController : MonoBehaviour
     public float crouchSpeed = 5f;
     public float crouchColliderReduction = 0.5f;
 
+    
+
     private Rigidbody2D rb;
     private CircleCollider2D wheelCollider;
     private BoxCollider2D bodyCollider;
@@ -31,6 +33,12 @@ public class RobotController : MonoBehaviour
     private float horizontalInput;
 
     private bool isCrouching = false;
+
+    [Header("Crouch Head Clearance Check")]
+    public Transform ceilingCheck; // Place an empty GameObject just above the crouched head
+    public float ceilingCheckRadius = 0.1f;
+    public LayerMask groundLayer; // Assign this to "Ground" layer in the inspector
+
     private Vector3 originalBodyPosition;
     private Vector2 originalBodyColliderSize;
     private Vector2 originalBodyColliderOffset;
@@ -106,13 +114,14 @@ public class RobotController : MonoBehaviour
         originalBodyColliderOffset = bodyCollider.offset;
     }
 
+
     void Update()
     {
         horizontalInput = Input.GetAxisRaw("Horizontal");
 
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
-            rb.velocity = new Vector2(rb.velocity.x, 0);
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
             rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
             isGrounded = false;
         }
@@ -138,7 +147,7 @@ public class RobotController : MonoBehaviour
 
     void FixedUpdate()
     {
-        rb.velocity = new Vector2(horizontalInput * moveSpeed, rb.velocity.y);
+        rb.linearVelocity = new Vector2(horizontalInput * moveSpeed, rb.linearVelocity.y);
         CheckGrounded();
 
         if (bodySprite != null)
@@ -149,7 +158,7 @@ public class RobotController : MonoBehaviour
         //wheel rotation
         if (wheelSprite != null)
         {
-            float rotationAmount = -rb.velocity.x * 360f * Time.fixedDeltaTime;
+            float rotationAmount = -rb.linearVelocity.x * 360f * Time.fixedDeltaTime;
             wheelSprite.Rotate(Vector3.forward, rotationAmount);
         }
     }
@@ -213,35 +222,40 @@ public class RobotController : MonoBehaviour
         }
         else if (isCrouching)
         {
-            bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
+            // Only uncrouch if nothing is overhead
+            bool canStand = !Physics2D.OverlapCircle(ceilingCheck.position, ceilingCheckRadius, groundLayer);
 
-            if (bodyMiddle != null)
+            if (canStand)
             {
-                bodyMiddle.localPosition = Vector3.Lerp(bodyMiddle.localPosition, originalBodyMiddlePosition, Time.deltaTime * crouchSpeed);
-            }
+                bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
 
-            if (bodyCollider != null)
-            {
-                bodyCollider.size = Vector2.Lerp(bodyCollider.size, originalBodyColliderSize, Time.deltaTime * crouchSpeed);
-                bodyCollider.offset = Vector2.Lerp(bodyCollider.offset, originalBodyColliderOffset, Time.deltaTime * crouchSpeed);
-            }
-
-            if (Vector3.Distance(bodySprite.localPosition, originalBodyPosition) < 0.01f)
-            {
-                isCrouching = false;
-                bodySprite.localPosition = originalBodyPosition;
-                if (bodyMiddle != null) bodyMiddle.localPosition = originalBodyMiddlePosition;
+                if (bodyMiddle != null)
+                {
+                    bodyMiddle.localPosition = Vector3.Lerp(bodyMiddle.localPosition, originalBodyMiddlePosition, Time.deltaTime * crouchSpeed);
+                }
 
                 if (bodyCollider != null)
                 {
-                    bodyCollider.size = originalBodyColliderSize;
-                    bodyCollider.offset = originalBodyColliderOffset;
+                    bodyCollider.size = Vector2.Lerp(bodyCollider.size, originalBodyColliderSize, Time.deltaTime * crouchSpeed);
+                    bodyCollider.offset = Vector2.Lerp(bodyCollider.offset, originalBodyColliderOffset, Time.deltaTime * crouchSpeed);
+                }
+
+                if (Vector3.Distance(bodySprite.localPosition, originalBodyPosition) < 0.01f)
+                {
+                    isCrouching = false;
+                    bodySprite.localPosition = originalBodyPosition;
+                    if (bodyMiddle != null) bodyMiddle.localPosition = originalBodyMiddlePosition;
+
+                    if (bodyCollider != null)
+                    {
+                        bodyCollider.size = originalBodyColliderSize;
+                        bodyCollider.offset = originalBodyColliderOffset;
+                    }
                 }
             }
         }
     }
 }
-
     void ToggleAttachment(List<GameObject> packageList, Transform attachPoint)
     {
         Collider2D item = Physics2D.OverlapCircle(attachPoint.position, attachRange, itemLayer);
