@@ -334,13 +334,17 @@ public class AttachmentHandler : MonoBehaviour
             proxy.transform.position = item.transform.position;
             proxy.transform.rotation = item.transform.rotation;
 
-            // Copy the collider to the proxy
+            // Scale factor to make proxy colliders slightly smaller than the original
+            // This gives a small buffer for movement while still preventing obvious clipping
+            float proxyScaleFactor = 0.5f;
+
+            // Copy the collider to the proxy, but make it slightly smaller
             Collider2D proxyCollider = null;
             if (itemCollider is BoxCollider2D)
             {
                 BoxCollider2D original = itemCollider as BoxCollider2D;
                 BoxCollider2D copy = proxy.AddComponent<BoxCollider2D>();
-                copy.size = original.size;
+                copy.size = original.size * proxyScaleFactor;
                 copy.offset = original.offset;
                 proxyCollider = copy;
             }
@@ -348,7 +352,39 @@ public class AttachmentHandler : MonoBehaviour
             {
                 CircleCollider2D original = itemCollider as CircleCollider2D;
                 CircleCollider2D copy = proxy.AddComponent<CircleCollider2D>();
-                copy.radius = original.radius;
+                copy.radius = original.radius * proxyScaleFactor;
+                copy.offset = original.offset;
+                proxyCollider = copy;
+            }
+            else if (itemCollider is PolygonCollider2D)
+            {
+                PolygonCollider2D original = itemCollider as PolygonCollider2D;
+                PolygonCollider2D copy = proxy.AddComponent<PolygonCollider2D>();
+
+                // Scale each path point toward the center to make it smaller
+                copy.pathCount = original.pathCount;
+                for (int i = 0; i < original.pathCount; i++)
+                {
+                    Vector2[] path = original.GetPath(i);
+                    Vector2[] scaledPath = new Vector2[path.Length];
+
+                    // Calculate center of the path
+                    Vector2 center = Vector2.zero;
+                    foreach (Vector2 point in path)
+                    {
+                        center += point;
+                    }
+                    center /= path.Length;
+
+                    // Scale each point toward the center
+                    for (int j = 0; j < path.Length; j++)
+                    {
+                        scaledPath[j] = center + (path[j] - center) * proxyScaleFactor;
+                    }
+
+                    copy.SetPath(i, scaledPath);
+                }
+
                 copy.offset = original.offset;
                 proxyCollider = copy;
             }

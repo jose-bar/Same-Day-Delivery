@@ -983,6 +983,7 @@ GameObject:
   - component: {fileID: 995911014}
   - component: {fileID: 995911015}
   - component: {fileID: 995911016}
+  - component: {fileID: 995911017}
   m_Layer: 0
   m_Name: HeadSprite
   m_TagString: Untagged
@@ -1127,6 +1128,21 @@ MonoBehaviour:
     m_Bits: 256
   detectionPadding: {x: 0.5, y: 1}
   detectionOffset: {x: 0, y: 0}
+--- !u!114 &995911017
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 995911012}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc84719b051a34268960ffc5376f8fb4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  feedbackDuration: 0.5
+  successColor: {r: 0, g: 1, b: 0, a: 1}
+  failureColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &1021105094
 GameObject:
   m_ObjectHideFlags: 0

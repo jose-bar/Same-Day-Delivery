@@ -177,6 +177,9 @@ public class RobotController : MonoBehaviour
         // Offset to ignore collisions with ground below
         float verticalOffset = 0.05f;
 
+        // Add a small movement buffer to prevent getting stuck on perfectly aligned edges
+        float movementBuffer = 0.03f;
+
         // Check body colliders first
         if (bodyCollider != null)
         {
@@ -185,7 +188,7 @@ public class RobotController : MonoBehaviour
             // Ignore collisions slightly below the center to avoid detecting ground
             RaycastHit2D hit = Physics2D.BoxCast(
                 bodyCenter,
-                new Vector2(bodyCollider.size.x, bodyCollider.size.y - verticalOffset),
+                new Vector2(bodyCollider.size.x - movementBuffer, bodyCollider.size.y - verticalOffset),
                 0f,
                 new Vector2(direction, 0),
                 Mathf.Abs(velocity.x * Time.fixedDeltaTime),
@@ -207,7 +210,7 @@ public class RobotController : MonoBehaviour
 
             RaycastHit2D hit = Physics2D.CircleCast(
                 adjustedCenter,
-                adjustedRadius,
+                adjustedRadius - movementBuffer,
                 new Vector2(direction, 0),
                 Mathf.Abs(velocity.x * Time.fixedDeltaTime),
                 obstacleLayer);
@@ -233,7 +236,7 @@ public class RobotController : MonoBehaviour
 
                     RaycastHit2D hit = Physics2D.BoxCast(
                         proxyCenter,
-                        boxProxy.size,
+                        boxProxy.size - new Vector2(movementBuffer, movementBuffer),
                         0f,
                         new Vector2(direction, 0),
                         Mathf.Abs(velocity.x * Time.fixedDeltaTime),
@@ -252,7 +255,7 @@ public class RobotController : MonoBehaviour
 
                     RaycastHit2D hit = Physics2D.CircleCast(
                         proxyCenter,
-                        circleProxy.radius,
+                        circleProxy.radius - movementBuffer,
                         new Vector2(direction, 0),
                         Mathf.Abs(velocity.x * Time.fixedDeltaTime),
                         obstacleLayer);
