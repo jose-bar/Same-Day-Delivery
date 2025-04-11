@@ -14,9 +14,11 @@ public class RobotController : MonoBehaviour
     public float hAcceleration = .5f; // Acceleration on movement key press
     public float hFriction = 2f;
     public float maxSpeed = 5f;
-    
-    public float totalWeight = 0;
-    
+    public float totalWeight = 0f;
+    public float maxSwayAngle = 25f;
+    public float maxSwayImpulse = 30f;
+    public float swaySpeedRatio = .7f;
+    // private bool swayImpulse = true;
     
     [Header("Ground Check")]
     public float groundCheckDistance = 0.5f;
@@ -59,6 +61,7 @@ public class RobotController : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         wheelCollider = GetComponent<CircleCollider2D>();
+        //swayImpulse = true;
 
         if (wheelCollider == null)
             Debug.LogError("No CircleCollider2D found on the robot!");
@@ -112,13 +115,13 @@ public class RobotController : MonoBehaviour
         horizontalInput = Input.GetAxisRaw("Horizontal");
         
         // debug message
-        if (Input.GetKeyDown(KeyCode.P)) {Debug.Log("curent input direction: " + horizontalInput + ". current speed: " + rb.velocity.x);}
+        if (Input.GetKeyDown(KeyCode.P)) {Debug.Log("curent input direction: " + horizontalInput + ". current speed: " + rb.velocity.x + ". current rotation: " + rb.rotation);}
 
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
             rb.velocity = new Vector2(rb.velocity.x, 0);
             rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
-            isGrounded = false;
+            isGrounded = true;
         }
         
         // Handle crouching
@@ -139,14 +142,19 @@ public class RobotController : MonoBehaviour
                 ToggleAttachment(topPackages, topAttachPoint);
             }
         }
-
+        
+        
+       
         
     }
 
     void FixedUpdate()
     {
-        // Simple movement
         PlayerMovementH();
+        
+        
+        PlayerSway();
+        
 
         CheckGrounded();
 
@@ -310,5 +318,39 @@ public class RobotController : MonoBehaviour
                 rb.velocity = new Vector2(0, rb.velocity.y);
             }
         }
+    }
+
+
+
+    void PlayerSway(){
+        float playerRotation = rb.rotation;
+        
+        if (horizontalInput != 0){
+            // Commented section is for possible "bounce" in player sway at initial movement
+            //if(swayImpulse){}
+            
+            // Math.Log((Math.Abs(rb.velocity.x) , 2)
+
+            // player sway on movement press
+            if (Math.Abs(rb.rotation) <= maxSwayAngle) 
+            {
+                playerRotation += (Math.Abs(rb.velocity.x)) * (swaySpeedRatio) * horizontalInput;
+                if (playerRotation <= maxSwayAngle){
+                    rb.rotation = playerRotation;
+                }
+                else
+                {
+                    playerRotation = horizontalInput * maxSwayAngle;
+                    rb.rotation = playerRotation;
+                } 
+            }
+            
+        }
+        else if (playerRotation != 0) 
+        {
+            playerRotation += -Math.Sign(playerRotation) * ((float) Math.Pow(2, Math.Abs(playerRotation) / 16) - 1) * swaySpeedRatio;
+            rb.rotation = playerRotation;
+        }
+
     }
 }
