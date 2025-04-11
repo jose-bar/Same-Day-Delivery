@@ -285,7 +285,7 @@ MonoBehaviour:
   src1: {fileID: 1485433977}
   src2: {fileID: 1858836306}
   src3: {fileID: 1749028693}
-  sfx1: {fileID: 8300000, guid: 246335211e1120448825f0ae6b1d8dfe, type: 3}
+  sfx1: {fileID: 8300000, guid: f73d9e7ea77efba448adcaa8af221532, type: 3}
   sfx2: {fileID: 8300000, guid: c03c8b8d963cf364fbb76dece5d6d68b, type: 3}
   sfx3: {fileID: 8300000, guid: d90463004a6fdd74da8f06f224ba6e91, type: 3}
   sfx4: {fileID: 8300000, guid: ca3844b644927954795c280b40a79e2b, type: 3}
