@@ -253,9 +253,9 @@ MonoBehaviour:
   itemLayer:
     serializedVersion: 2
     m_Bits: 64
-  detectionPadding: 0.5
-  sideDetectSize: {x: 0.5, y: 0.5}
-  topDetectSize: {x: 0.5, y: 0.5}
+  detectionPadding: {x: 0.5, y: 0.5}
+  sideDetectSize: {x: 1, y: 1}
+  topDetectSize: {x: 1, y: 1}
 --- !u!114 &33954760
 MonoBehaviour:
   m_ObjectHideFlags: 0
