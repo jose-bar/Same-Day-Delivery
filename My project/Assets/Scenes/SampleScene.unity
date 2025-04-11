@@ -236,7 +236,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   moveSpeed: 5
   jumpForce: 8
-  groundCheckDistance: 1
+  groundCheckDistance: 0.1
   bodySprite: {fileID: 995911013}
   bodyMiddle: {fileID: 230200551}
   wheelSprite: {fileID: 927671650}
@@ -1109,7 +1109,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 10374c912c71010439b2dc54cd54d59e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  attachRange: 0.5
+  attachRange: 0.2
   itemLayer:
     serializedVersion: 2
     m_Bits: 64
