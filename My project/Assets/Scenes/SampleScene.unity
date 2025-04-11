@@ -249,13 +249,7 @@ MonoBehaviour:
   groundLayer:
     serializedVersion: 2
     m_Bits: 128
-  attachRange: 1
-  itemLayer:
-    serializedVersion: 2
-    m_Bits: 64
-  detectionPadding: {x: 0.5, y: 0.5}
-  sideDetectSize: {x: 1, y: 1}
-  topDetectSize: {x: 1, y: 1}
+  attachmentHandler: {fileID: 0}
 --- !u!114 &33954760
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -979,6 +973,7 @@ GameObject:
   - component: {fileID: 995911013}
   - component: {fileID: 995911014}
   - component: {fileID: 995911015}
+  - component: {fileID: 995911016}
   m_Layer: 0
   m_Name: HeadSprite
   m_TagString: Untagged
@@ -1102,6 +1097,24 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 0.63, y: 0.54}
   m_EdgeRadius: 0
+--- !u!114 &995911016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 995911012}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10374c912c71010439b2dc54cd54d59e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  attachRange: 0.5
+  itemLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  detectionPadding: {x: 0.5, y: 1}
+  detectionOffset: {x: 0, y: 0}
 --- !u!1 &1021105094
 GameObject:
   m_ObjectHideFlags: 0
