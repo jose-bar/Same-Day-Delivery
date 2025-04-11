@@ -116,6 +116,9 @@ public class RobotController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
+            OneSoundEffects robot = GetComponent<OneSoundEffects>();
+            robot.PlayJumpAudio();
+
             rb.velocity = new Vector2(rb.velocity.x, 0);
             rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
             isGrounded = false;
@@ -171,6 +174,11 @@ public class RobotController : MonoBehaviour
                      (hitRight.collider != null && hitRight.collider.gameObject != gameObject && hitRight.collider.gameObject != bodySprite.gameObject);
     }
 
+    void OnCollisionEnter2D(Collision2D collision) {
+        OneSoundEffects robot = GetComponent<OneSoundEffects>();
+        robot.PlayBumpAudio();
+    }
+
     void OnCollisionStay2D(Collision2D collision)
     {
         for (int i = 0; i < collision.contactCount; i++)
@@ -192,6 +200,11 @@ public class RobotController : MonoBehaviour
         {
             if (Input.GetKey(KeyCode.S))
             {
+                OneSoundEffects robot = GetComponent<OneSoundEffects>();
+                if (!isCrouching) {
+                    robot.PlayCrouchAudio();
+                }
+                
                 isCrouching = true;
                 Vector3 targetPos = new Vector3(originalBodyPosition.x, originalBodyPosition.y - crouchAmount, originalBodyPosition.z);
                 bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, targetPos, Time.deltaTime * crouchSpeed);
@@ -209,6 +222,9 @@ public class RobotController : MonoBehaviour
             }
             else if (isCrouching)
             {
+                OneSoundEffects robot = GetComponent<OneSoundEffects>();
+                robot.PlayUncrouchAudio();
+                
                 bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
 
                 if (bodyCollider != null)
@@ -287,6 +303,9 @@ public class RobotController : MonoBehaviour
         float h_speed = Math.Abs(rb.velocity.x);
         if (horizontalInput != 0)
         {
+            LoopSoundEffects robot = GetComponent<LoopSoundEffects>();
+            robot.PlayMoveAudio();
+
             h_velocity = (hAcceleration / (1 + totalWeight));
             if (h_speed + h_velocity >= maxSpeed / (1 + totalWeight)){
                h_velocity = 0;
@@ -299,6 +318,9 @@ public class RobotController : MonoBehaviour
         }
         else
         {
+            LoopSoundEffects robot = GetComponent<LoopSoundEffects>();
+            robot.StopAudio();
+
             h_velocity = momentumDir * hFriction * (1 + totalWeight);
             if (h_speed - (momentumDir * h_velocity) > 0)
             {
