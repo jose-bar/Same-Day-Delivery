@@ -42,6 +42,9 @@ public class RobotController : MonoBehaviour
     [Header("Attachment")]
     public AttachmentHandler attachmentHandler;
 
+    [Header("Movement Validation")]
+    public LayerMask obstacleLayer; // Same layer mask as in AttachmentHandler
+
     void Start()
     {
         if (attachmentHandler == null)
@@ -133,7 +136,20 @@ public class RobotController : MonoBehaviour
 
     void FixedUpdate()
     {
-        rb.linearVelocity = new Vector2(horizontalInput * moveSpeed, rb.linearVelocity.y);
+        // Validate movement before applying it
+        Vector2 intendedVelocity = new Vector2(horizontalInput * moveSpeed, rb.linearVelocity.y);
+
+        // Only apply horizontal movement if it doesn't cause collisions with attachments
+        if (CanMove(intendedVelocity))
+        {
+            rb.linearVelocity = intendedVelocity;
+        }
+        else
+        {
+            // Only allow vertical movement if horizontal would cause a collision
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+        }
+
         CheckGrounded();
 
         if (bodySprite != null)
@@ -146,6 +162,112 @@ public class RobotController : MonoBehaviour
             float rotationAmount = -rb.linearVelocity.x * 360f * Time.fixedDeltaTime;
             wheelSprite.Rotate(Vector3.forward, rotationAmount);
         }
+    }
+
+    // Check if movement is allowed (won't cause clipping through obstacles)
+    bool CanMove(Vector2 velocity)
+    {
+        // If no horizontal movement, always allow
+        if (Mathf.Approximately(velocity.x, 0f))
+            return true;
+
+        // Get movement direction (1 for right, -1 for left)
+        float direction = Mathf.Sign(velocity.x);
+
+        // Offset to ignore collisions with ground below
+        float verticalOffset = 0.05f;
+
+        // Check body colliders first
+        if (bodyCollider != null)
+        {
+            Vector2 bodyCenter = (Vector2)bodySprite.position + bodyCollider.offset;
+
+            // Ignore collisions slightly below the center to avoid detecting ground
+            RaycastHit2D hit = Physics2D.BoxCast(
+                bodyCenter,
+                new Vector2(bodyCollider.size.x, bodyCollider.size.y - verticalOffset),
+                0f,
+                new Vector2(direction, 0),
+                Mathf.Abs(velocity.x * Time.fixedDeltaTime),
+                obstacleLayer);
+
+            // Only count this as a collision if the hit point is not below us
+            if (hit.collider != null && hit.point.y >= transform.position.y - wheelCollider.radius)
+            {
+                return false;
+            }
+        }
+
+        // Check wheel collider (but only the upper half to avoid ground)
+        if (wheelCollider != null)
+        {
+            // Create a slightly smaller circle cast that doesn't touch the ground
+            float adjustedRadius = wheelCollider.radius * 0.8f; // Make it slightly smaller
+            Vector2 adjustedCenter = (Vector2)transform.position + new Vector2(0, wheelCollider.radius * 0.2f); // Move up slightly
+
+            RaycastHit2D hit = Physics2D.CircleCast(
+                adjustedCenter,
+                adjustedRadius,
+                new Vector2(direction, 0),
+                Mathf.Abs(velocity.x * Time.fixedDeltaTime),
+                obstacleLayer);
+
+            // Only count as collision if hit point is not below us
+            if (hit.collider != null && hit.point.y >= transform.position.y - wheelCollider.radius)
+            {
+                return false;
+            }
+        }
+
+        // Now check all attachment proxy colliders
+        if (attachmentHandler != null)
+        {
+            List<Collider2D> proxyColliders = attachmentHandler.GetAllProxyColliders();
+
+            foreach (Collider2D proxy in proxyColliders)
+            {
+                if (proxy is BoxCollider2D)
+                {
+                    BoxCollider2D boxProxy = proxy as BoxCollider2D;
+                    Vector2 proxyCenter = (Vector2)proxy.transform.position + boxProxy.offset;
+
+                    RaycastHit2D hit = Physics2D.BoxCast(
+                        proxyCenter,
+                        boxProxy.size,
+                        0f,
+                        new Vector2(direction, 0),
+                        Mathf.Abs(velocity.x * Time.fixedDeltaTime),
+                        obstacleLayer);
+
+                    // Only count as collision if hit point is not below the wheel
+                    if (hit.collider != null && hit.point.y >= transform.position.y - wheelCollider.radius)
+                    {
+                        return false;
+                    }
+                }
+                else if (proxy is CircleCollider2D)
+                {
+                    CircleCollider2D circleProxy = proxy as CircleCollider2D;
+                    Vector2 proxyCenter = (Vector2)proxy.transform.position + circleProxy.offset;
+
+                    RaycastHit2D hit = Physics2D.CircleCast(
+                        proxyCenter,
+                        circleProxy.radius,
+                        new Vector2(direction, 0),
+                        Mathf.Abs(velocity.x * Time.fixedDeltaTime),
+                        obstacleLayer);
+
+                    // Only count as collision if hit point is not below the wheel
+                    if (hit.collider != null && hit.point.y >= transform.position.y - wheelCollider.radius)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // If no collisions detected, movement is allowed
+        return true;
     }
 
     void CheckGrounded()

@@ -248,8 +248,11 @@ MonoBehaviour:
   ceilingCheckRadius: 0.1
   groundLayer:
     serializedVersion: 2
-    m_Bits: 128
+    m_Bits: 384
   attachmentHandler: {fileID: 0}
+  obstacleLayer:
+    serializedVersion: 2
+    m_Bits: 256
 --- !u!114 &33954760
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -262,6 +265,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ad480c3d4c44a34b81435b1c7c37e32, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  weight: 1
+  canBeAttached: 1
 --- !u!1 &49348747
 GameObject:
   m_ObjectHideFlags: 0
@@ -437,6 +442,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ad480c3d4c44a34b81435b1c7c37e32, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  weight: 1
+  canBeAttached: 1
 --- !u!1 &230200550
 GameObject:
   m_ObjectHideFlags: 0
@@ -699,6 +706,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ad480c3d4c44a34b81435b1c7c37e32, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  weight: 1
+  canBeAttached: 1
 --- !u!1 &338481529
 GameObject:
   m_ObjectHideFlags: 0
@@ -1113,6 +1122,9 @@ MonoBehaviour:
   itemLayer:
     serializedVersion: 2
     m_Bits: 64
+  obstacleLayer:
+    serializedVersion: 2
+    m_Bits: 256
   detectionPadding: {x: 0.5, y: 1}
   detectionOffset: {x: 0, y: 0}
 --- !u!1 &1021105094
@@ -1290,6 +1302,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ad480c3d4c44a34b81435b1c7c37e32, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  weight: 1
+  canBeAttached: 1
 --- !u!1 &1755108893
 GameObject:
   m_ObjectHideFlags: 0
@@ -1302,7 +1316,7 @@ GameObject:
   - component: {fileID: 1755108896}
   - component: {fileID: 1755108895}
   - component: {fileID: 1755108894}
-  m_Layer: 7
+  m_Layer: 8
   m_Name: Platform
   m_TagString: Untagged
   m_Icon: {fileID: 0}
