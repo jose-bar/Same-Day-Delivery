@@ -1,15 +1,29 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+
+using Unity.Mathematics;
+using System.Linq;
+
 using UnityEngine;
+using UnityEngine.PlayerLoop;
 
 public class RobotController : MonoBehaviour
 {
     [Header("Movement Settings")]
     public float moveSpeed = 5f;
     public float jumpForce = 8f;
-
+    public float hAcceleration = .5f; // Acceleration on movement key press
+    public float hFriction = 2f;
+    public float maxSpeed = 5f;
+    public float totalWeight = 0f;
+    public float maxSwayAngle = 25f;
+    public float maxSwayImpulse = 30f;
+    public float swaySpeedRatio = .7f;
+    // private bool swayImpulse = true;
+    
     [Header("Ground Check")]
-    public float groundCheckDistance = 0.6f;
+    public float groundCheckDistance = 0.5f;
 
     [Header("Body Settings")]
     public Transform bodySprite;
@@ -19,9 +33,9 @@ public class RobotController : MonoBehaviour
     public Vector2 bodyColliderSize = new Vector2(0.8f, 1.2f);
 
     [Header("Crouch Settings")]
-    public float crouchAmount = 0.3f;
+    public float crouchAmount = 0.8f;
     public float crouchSpeed = 5f;
-    public float crouchColliderReduction = 0.5f;
+    public float crouchColliderReduction = 0.6f; // How much to reduce collider height when crouching
 
     private Rigidbody2D rb;
     private CircleCollider2D wheelCollider;
@@ -56,6 +70,7 @@ public class RobotController : MonoBehaviour
 
         rb = GetComponent<Rigidbody2D>();
         wheelCollider = GetComponent<CircleCollider2D>();
+        //swayImpulse = true;
 
         if (wheelCollider == null)
             Debug.LogError("No CircleCollider2D found on the robot!");
@@ -116,13 +131,26 @@ public class RobotController : MonoBehaviour
         if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
         if (Input.GetKey(KeyCode.D)) horizontalInput = 1f;
 
+        // Handle jump
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
+            OneSoundEffects robot = GetComponent<OneSoundEffects>();
+            robot.PlayJumpAudio();
+
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
             rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
             isGrounded = false;
         }
 
+        // Debug input
+        if (Input.GetKeyDown(KeyCode.P))
+        {
+            Debug.Log("current input direction: " + horizontalInput +
+                    ". current speed: " + rb.linearVelocity.x +
+                    ". current rotation: " + rb.rotation);
+        }
+
+        // Handle crouching
         HandleCrouch();
 
         // Attachment keys (delegate to handler)
@@ -133,6 +161,7 @@ public class RobotController : MonoBehaviour
         else if (Input.GetKeyDown(KeyCode.UpArrow))
             attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Top);
     }
+
 
     void FixedUpdate()
     {
@@ -150,6 +179,12 @@ public class RobotController : MonoBehaviour
             rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
         }
 
+        PlayerMovementH();
+        
+        
+        PlayerSway();
+
+
         CheckGrounded();
 
         if (bodySprite != null)
@@ -164,7 +199,6 @@ public class RobotController : MonoBehaviour
         }
     }
 
-    // Check if movement is allowed (won't cause clipping through obstacles)
     bool CanMove(Vector2 velocity)
     {
         // If no horizontal movement, always allow
@@ -288,6 +322,11 @@ public class RobotController : MonoBehaviour
                      (hitRight.collider != null && hitRight.collider.gameObject != gameObject && hitRight.collider.gameObject != bodySprite.gameObject);
     }
 
+    void OnCollisionEnter2D(Collision2D collision) {
+        OneSoundEffects robot = GetComponent<OneSoundEffects>();
+        robot.PlayBumpAudio();
+    }
+
     void OnCollisionStay2D(Collision2D collision)
     {
         for (int i = 0; i < collision.contactCount; i++)
@@ -309,6 +348,11 @@ public class RobotController : MonoBehaviour
         {
             if (Input.GetKey(KeyCode.S))
             {
+                OneSoundEffects robot = GetComponent<OneSoundEffects>();
+                if (!isCrouching) {
+                    robot.PlayCrouchAudio();
+                }
+                
                 isCrouching = true;
                 Vector3 targetPos = new Vector3(originalBodyPosition.x, originalBodyPosition.y - crouchAmount, originalBodyPosition.z);
                 bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, targetPos, Time.deltaTime * crouchSpeed);
@@ -333,6 +377,10 @@ public class RobotController : MonoBehaviour
             else if (isCrouching)
             {
                 bool canStand = !Physics2D.OverlapCircle(ceilingCheck.position, ceilingCheckRadius, groundLayer);
+                OneSoundEffects robot = GetComponent<OneSoundEffects>();
+                robot.PlayUncrouchAudio();
+                
+                bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
 
                 if (canStand)
                 {
@@ -364,5 +412,79 @@ public class RobotController : MonoBehaviour
                 }
             }
         }
+    }
+
+
+  
+    void PlayerMovementH()
+    {
+        float h_velocity = 0;
+        int momentumDir = Math.Sign(rb.linearVelocity.x);
+        float h_speed = Math.Abs(rb.linearVelocity.x);
+        if (horizontalInput != 0)
+        {
+            LoopSoundEffects robot = GetComponent<LoopSoundEffects>();
+            robot.PlayMoveAudio();
+
+            h_velocity = (hAcceleration / (1 + totalWeight));
+            if (h_speed + h_velocity >= maxSpeed / (1 + totalWeight)){
+               h_velocity = 0;
+               rb.linearVelocity = new Vector2(maxSpeed / (1 + totalWeight) * horizontalInput, rb.linearVelocity.y);
+            }
+            else
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x + (h_velocity * horizontalInput), rb.linearVelocity.y);
+            }
+        }
+        else
+        {
+            LoopSoundEffects robot = GetComponent<LoopSoundEffects>();
+            robot.StopAudio();
+
+            h_velocity = momentumDir * hFriction * (1 + totalWeight);
+            if (h_speed - (momentumDir * h_velocity) > 0)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x - h_velocity, rb.linearVelocity.y);
+            }
+            else
+            {
+                h_velocity =  0;
+                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+            }
+        }
+    }
+
+
+
+    void PlayerSway(){
+        float playerRotation = rb.rotation;
+        
+        if (horizontalInput != 0){
+            // Commented section is for possible "bounce" in player sway at initial movement
+            //if(swayImpulse){}
+            
+            // Math.Log((Math.Abs(rb.velocity.x) , 2)
+
+            // player sway on movement press
+            if (Math.Abs(rb.rotation) <= maxSwayAngle) 
+            {
+                playerRotation += (Math.Abs(rb.linearVelocity.x)) * (swaySpeedRatio) * horizontalInput;
+                if (playerRotation <= maxSwayAngle){
+                    rb.rotation = playerRotation;
+                }
+                else
+                {
+                    playerRotation = horizontalInput * maxSwayAngle;
+                    rb.rotation = playerRotation;
+                } 
+            }
+            
+        }
+        else if (playerRotation != 0) 
+        {
+            playerRotation += -Math.Sign(playerRotation) * ((float) Math.Pow(2, Math.Abs(playerRotation) / 16) - 1) * swaySpeedRatio;
+            rb.rotation = playerRotation;
+        }
+
     }
 }
