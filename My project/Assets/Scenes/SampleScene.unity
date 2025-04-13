@@ -365,9 +365,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0802fbaf46588433ca2c82e531c5dcfa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 5
+  maxMoveSpeed: 8
+  acceleration: 25
+  deceleration: 10
   jumpForce: 8
   groundCheckDistance: 0.1
+  groundedBufferTime: 0.3
   bodySprite: {fileID: 995911013}
   bodyMiddle: {fileID: 230200551}
   wheelSprite: {fileID: 927671650}
@@ -383,11 +386,13 @@ MonoBehaviour:
   groundLayer:
     serializedVersion: 2
     m_Bits: 384
+  sideCheckDistance: 0.1
   attachmentHandler: {fileID: 995911016}
   obstacleLayer:
     serializedVersion: 2
     m_Bits: 256
   collisionBuffer: 0.05
+  allowBottomCollisions: 1
 --- !u!114 &33954760
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2016,7 +2021,7 @@ Transform:
   m_GameObject: {fileID: 1755108893}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 3.04, y: 0.19, z: 0}
+  m_LocalPosition: {x: 3.01, y: 0.74, z: 0}
   m_LocalScale: {x: 3, y: 0.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
