@@ -20,6 +20,11 @@ public class AttachmentHandler : MonoBehaviour
     private bool canToggleAttach = true;
     private bool hasPackageInRange = false;
 
+    // Debug properties
+    private Vector2 lastAttachPosition;
+    private bool showDebugRays = true;
+    private float debugRayDuration = 2f;
+
     public enum AttachmentSide { Right, Left, Top }
 
     public void ToggleAttachment(AttachmentSide side)
@@ -53,11 +58,12 @@ public class AttachmentHandler : MonoBehaviour
             if (!packageList.Contains(item) && !IsAttachedToAnyList(item))
             {
                 Vector2 attachPos = GetAttachPosition(side);
+                lastAttachPosition = attachPos; // Store for debugging
 
                 // Check if attaching would cause a collision
-                if (!WouldCollideAtPosition(item, attachPos))
+                if (!WouldCollideAtPosition(item, attachPos, side))
                 {
-                    AttachItem(item, attachPos, packageList);
+                    AttachItem(item, attachPos, packageList, side);
                     attachedSuccessfully = true;
 
                     // Show success feedback if we have the component
@@ -93,7 +99,7 @@ public class AttachmentHandler : MonoBehaviour
     }
 
     // Check if attaching an item would cause it to collide with obstacles
-    private bool WouldCollideAtPosition(GameObject item, Vector2 position)
+    private bool WouldCollideAtPosition(GameObject item, Vector2 position, AttachmentSide side)
     {
         // Store original position and parent
         Vector3 originalPos = item.transform.position;
@@ -118,13 +124,15 @@ public class AttachmentHandler : MonoBehaviour
         // Temporarily move to test position
         item.transform.SetParent(transform);
         item.transform.position = position;
+        item.transform.rotation = transform.rotation;
 
         // Create a temporary collider to use for overlap check
         GameObject tempObject = new GameObject("TempCollisionCheck");
         tempObject.transform.position = position;
-        tempObject.transform.rotation = Quaternion.identity;
+        tempObject.transform.rotation = transform.rotation;
 
         bool collisionDetected = false;
+        List<Collider2D> allOverlappingColliders = new List<Collider2D>();
 
         // For each collider on the item, create a matching one on our temp object
         for (int i = 0; i < itemColliders.Length; i++)
@@ -170,6 +178,9 @@ public class AttachmentHandler : MonoBehaviour
                 List<Collider2D> results = new List<Collider2D>();
                 int count = Physics2D.OverlapCollider(tempCollider, filter, results);
 
+                // Store all results for more detailed analysis
+                allOverlappingColliders.AddRange(results);
+
                 // Remove any colliders from our main robot to prevent self-collision
                 for (int r = results.Count - 1; r >= 0; r--)
                 {
@@ -181,71 +192,95 @@ public class AttachmentHandler : MonoBehaviour
                     }
                 }
 
+                // Now check if this is a valid collision based on the attachment side and obstacle position
                 if (results.Count > 0)
                 {
-                    collisionDetected = true;
-                    break; // No need to check more colliders
+                    // For each potential collision, determine if it's actually blocking the attachment
+                    bool trueCollision = false;
+
+                    foreach (Collider2D obstacle in results)
+                    {
+                        // Get the obstacle bounds
+                        Bounds obstacleBounds = obstacle.bounds;
+                        Bounds itemBounds = tempCollider.bounds;
+
+                        // Draw debug rays showing the collision points
+                        if (showDebugRays)
+                        {
+                            Debug.DrawLine(position, obstacle.transform.position, Color.red, debugRayDuration);
+
+                            // Draw the bounds of both objects
+                            DrawDebugBounds(itemBounds, Color.yellow);
+                            DrawDebugBounds(obstacleBounds, Color.cyan);
+                        }
+
+                        // Different collision logic based on attachment side
+                        switch (side)
+                        {
+                            case AttachmentSide.Top:
+                                // For top attachment, only consider obstacles above the robot
+                                if (obstacleBounds.center.y > transform.position.y)
+                                {
+                                    trueCollision = true;
+                                }
+                                break;
+
+                            case AttachmentSide.Right:
+                                // For right attachment, only consider obstacles to the right or at similar height
+                                if (obstacleBounds.center.x > transform.position.x)
+                                {
+                                    // If the obstacle is above us, make sure it's actually blocking
+                                    if (obstacleBounds.min.y > itemBounds.max.y)
+                                    {
+                                        // Obstacle is above, not blocking
+                                        continue;
+                                    }
+                                    // If the obstacle is below us, make sure it's actually blocking
+                                    if (obstacleBounds.max.y < itemBounds.min.y)
+                                    {
+                                        // Obstacle is below, not blocking
+                                        continue;
+                                    }
+                                    trueCollision = true;
+                                }
+                                break;
+
+                            case AttachmentSide.Left:
+                                // For left attachment, only consider obstacles to the left or at similar height
+                                if (obstacleBounds.center.x < transform.position.x)
+                                {
+                                    // If the obstacle is above us, make sure it's actually blocking
+                                    if (obstacleBounds.min.y > itemBounds.max.y)
+                                    {
+                                        // Obstacle is above, not blocking
+                                        continue;
+                                    }
+                                    // If the obstacle is below us, make sure it's actually blocking
+                                    if (obstacleBounds.max.y < itemBounds.min.y)
+                                    {
+                                        // Obstacle is below, not blocking
+                                        continue;
+                                    }
+                                    trueCollision = true;
+                                }
+                                break;
+                        }
+
+                        if (trueCollision)
+                        {
+                            collisionDetected = true;
+                            break;
+                        }
+                    }
+
+                    if (collisionDetected)
+                        break; // No need to check more colliders
                 }
             }
         }
 
         // Destroy the temporary object
         Destroy(tempObject);
-
-        // Additional check using more precise Physics2D methods
-        if (!collisionDetected)
-        {
-            // Use Physics2D.OverlapBox/OverlapCircle at multiple points around the collider bounds
-            // to double-check for collisions with smaller obstacles
-            Bounds itemBounds = new Bounds();
-            bool boundsInitialized = false;
-
-            foreach (Collider2D col in itemColliders)
-            {
-                if (!boundsInitialized)
-                {
-                    itemBounds = col.bounds;
-                    boundsInitialized = true;
-                }
-                else
-                {
-                    itemBounds.Encapsulate(col.bounds);
-                }
-            }
-
-            // Check multiple points along the bounds
-            Vector2[] checkPoints = new Vector2[]
-            {
-                new Vector2(itemBounds.min.x, itemBounds.min.y), // Bottom-left
-                new Vector2(itemBounds.max.x, itemBounds.min.y), // Bottom-right
-                new Vector2(itemBounds.min.x, itemBounds.max.y), // Top-left
-                new Vector2(itemBounds.max.x, itemBounds.max.y), // Top-right
-                new Vector2(itemBounds.center.x, itemBounds.min.y), // Bottom-center
-                new Vector2(itemBounds.center.x, itemBounds.max.y), // Top-center
-                new Vector2(itemBounds.min.x, itemBounds.center.y), // Left-center
-                new Vector2(itemBounds.max.x, itemBounds.center.y), // Right-center
-                new Vector2(itemBounds.center.x, itemBounds.center.y), // Center
-            };
-
-            float checkRadius = 0.05f; // Small radius to check for precise collisions
-            foreach (Vector2 point in checkPoints)
-            {
-                Collider2D[] hits = Physics2D.OverlapCircleAll(point, checkRadius, obstacleLayer);
-                foreach (Collider2D hit in hits)
-                {
-                    if (hit.gameObject != gameObject &&
-                        !hit.transform.IsChildOf(transform) &&
-                        !transform.IsChildOf(hit.transform))
-                    {
-                        collisionDetected = true;
-                        break;
-                    }
-                }
-
-                if (collisionDetected)
-                    break;
-            }
-        }
 
         // Restore original collider states
         for (int i = 0; i < itemColliders.Length; i++)
@@ -256,8 +291,21 @@ public class AttachmentHandler : MonoBehaviour
         // Restore original position and parent
         item.transform.SetParent(originalParent);
         item.transform.position = originalPos;
+        item.transform.rotation = Quaternion.identity;
 
         return collisionDetected;
+    }
+
+    private void DrawDebugBounds(Bounds bounds, Color color)
+    {
+        Vector3 min = bounds.min;
+        Vector3 max = bounds.max;
+
+        // Draw the wireframe of the bounds
+        Debug.DrawLine(new Vector3(min.x, min.y, min.z), new Vector3(max.x, min.y, min.z), color, debugRayDuration);
+        Debug.DrawLine(new Vector3(min.x, min.y, min.z), new Vector3(min.x, max.y, min.z), color, debugRayDuration);
+        Debug.DrawLine(new Vector3(max.x, min.y, min.z), new Vector3(max.x, max.y, min.z), color, debugRayDuration);
+        Debug.DrawLine(new Vector3(min.x, max.y, min.z), new Vector3(max.x, max.y, min.z), color, debugRayDuration);
     }
 
     List<GameObject> GetPackageList(AttachmentSide side)
@@ -298,7 +346,7 @@ public class AttachmentHandler : MonoBehaviour
         };
     }
 
-    void AttachItem(GameObject item, Vector2 attachCenter, List<GameObject> packageList)
+    void AttachItem(GameObject item, Vector2 attachCenter, List<GameObject> packageList, AttachmentSide side)
     {
         // Check if it's already in another list - safety check
         if (IsAttachedToAnyList(item))
@@ -308,14 +356,14 @@ public class AttachmentHandler : MonoBehaviour
         }
 
         // Check once more for potential collision before finalizing attachment
-        if (WouldCollideAtPosition(item, attachCenter))
+        if (WouldCollideAtPosition(item, attachCenter, side))
         {
             Debug.LogWarning("Collision detected during final attachment check!");
             return;
         }
 
         item.transform.SetParent(transform);
-        item.transform.rotation = Quaternion.identity;
+        item.transform.rotation = transform.rotation;
         item.transform.position = attachCenter;
 
         // Disable the item's rigidbody
@@ -336,7 +384,7 @@ public class AttachmentHandler : MonoBehaviour
 
             // Scale factor to make proxy colliders slightly smaller than the original
             // This gives a small buffer for movement while still preventing obvious clipping
-            float proxyScaleFactor = 0.5f;
+            float proxyScaleFactor = 0.9f;
 
             // Copy the collider to the proxy, but make it slightly smaller
             Collider2D proxyCollider = null;
@@ -439,7 +487,22 @@ public class AttachmentHandler : MonoBehaviour
         // Reset transform parent and re-enable physics
         last.transform.SetParent(null);
         Rigidbody2D rb = last.GetComponent<Rigidbody2D>();
-        if (rb != null) rb.simulated = true;
+        if (rb != null)
+        {
+            rb.simulated = true;
+
+            // Add a small force to "push" the package away slightly
+            Package package = last.GetComponent<Package>();
+            if (package != null)
+            {
+                package.OnDetached();
+            }
+            else
+            {
+                // Default detachment behavior if no Package component
+                rb.AddForce(new Vector2(Random.Range(-1f, 1f), 0.5f), ForceMode2D.Impulse);
+            }
+        }
     }
 
     // Get all proxy colliders to be used for movement validation
@@ -448,8 +511,11 @@ public class AttachmentHandler : MonoBehaviour
         List<Collider2D> colliders = new List<Collider2D>();
         foreach (GameObject proxy in proxyColliders.Values)
         {
-            Collider2D col = proxy.GetComponent<Collider2D>();
-            if (col != null) colliders.Add(col);
+            if (proxy != null)
+            {
+                Collider2D col = proxy.GetComponent<Collider2D>();
+                if (col != null) colliders.Add(col);
+            }
         }
         return colliders;
     }
@@ -473,5 +539,12 @@ public class AttachmentHandler : MonoBehaviour
         Gizmos.DrawWireCube(GetAttachPosition(AttachmentSide.Right), Vector3.one * markerSize);
         Gizmos.DrawWireCube(GetAttachPosition(AttachmentSide.Left), Vector3.one * markerSize);
         Gizmos.DrawWireCube(GetAttachPosition(AttachmentSide.Top), Vector3.one * markerSize);
+
+        // Draw the last attempted attach position
+        if (Application.isPlaying)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(lastAttachPosition, markerSize * 0.8f);
+        }
     }
 }
