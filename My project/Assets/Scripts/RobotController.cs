@@ -1,29 +1,15 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
-
-using Unity.Mathematics;
-using System.Linq;
-
 using UnityEngine;
-using UnityEngine.PlayerLoop;
 
 public class RobotController : MonoBehaviour
 {
     [Header("Movement Settings")]
     public float moveSpeed = 5f;
     public float jumpForce = 8f;
-    public float hAcceleration = .5f; // Acceleration on movement key press
-    public float hFriction = 2f;
-    public float maxSpeed = 5f;
-    public float totalWeight = 0f;
-    public float maxSwayAngle = 25f;
-    public float maxSwayImpulse = 30f;
-    public float swaySpeedRatio = .7f;
-    // private bool swayImpulse = true;
 
     [Header("Ground Check")]
-    public float groundCheckDistance = 0.5f;
+    public float groundCheckDistance = 0.6f;
 
     [Header("Body Settings")]
     public Transform bodySprite;
@@ -33,9 +19,16 @@ public class RobotController : MonoBehaviour
     public Vector2 bodyColliderSize = new Vector2(0.8f, 1.2f);
 
     [Header("Crouch Settings")]
-    public float crouchAmount = 0.8f;
+    public float crouchAmount = 0.3f;
     public float crouchSpeed = 5f;
-    public float crouchColliderReduction = 0.6f; // How much to reduce collider height when crouching
+    public float crouchColliderReduction = 0.5f;
+
+    [Header("Sway Settings")]
+    public float swayAmount = 0.1f;      // Amount of sway
+    public float swaySpeed = 3f;         // Speed of sway
+    public float swayResponsiveness = 5f; // How responsive the sway is to input change
+    private float currentSwayAngle = 0f;  // Current sway angle
+    private float swayVelocity = 0f;      // Current sway velocity for smooth damping
 
     private Rigidbody2D rb;
     private CircleCollider2D wheelCollider;
@@ -43,6 +36,7 @@ public class RobotController : MonoBehaviour
     private bool isGrounded;
     private float horizontalInput;
     private bool isCrouching = false;
+    private bool isAttemptingToStand = false;
 
     [Header("Crouch Head Clearance Check")]
     public Transform ceilingCheck;
@@ -58,6 +52,11 @@ public class RobotController : MonoBehaviour
 
     [Header("Movement Validation")]
     public LayerMask obstacleLayer; // Same layer mask as in AttachmentHandler
+    public float collisionBuffer = 0.05f; // Buffer to prevent getting stuck on edges
+
+    // Sound effects
+    private LoopSoundEffects loopSounds;
+    private OneSoundEffects oneSounds;
 
     void Start()
     {
@@ -68,9 +67,11 @@ public class RobotController : MonoBehaviour
                 Debug.LogWarning("AttachmentHandler not assigned and not found in children.");
         }
 
+        loopSounds = GetComponent<LoopSoundEffects>();
+        oneSounds = GetComponent<OneSoundEffects>();
+
         rb = GetComponent<Rigidbody2D>();
         wheelCollider = GetComponent<CircleCollider2D>();
-        //swayImpulse = true;
 
         if (wheelCollider == null)
             Debug.LogError("No CircleCollider2D found on the robot!");
@@ -131,27 +132,28 @@ public class RobotController : MonoBehaviour
         if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
         if (Input.GetKey(KeyCode.D)) horizontalInput = 1f;
 
-        // Handle jump
+        // Handle movement sound
+        if (Mathf.Abs(horizontalInput) > 0.1f && isGrounded)
+        {
+            if (loopSounds != null) loopSounds.PlayMoveAudio();
+        }
+        else
+        {
+            if (loopSounds != null) loopSounds.StopAudio();
+        }
+
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
-            OneSoundEffects robot = GetComponent<OneSoundEffects>();
-            robot.PlayJumpAudio();
-
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
             rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
             isGrounded = false;
+
+            // Play jump sound
+            if (oneSounds != null) oneSounds.PlayJumpAudio();
         }
 
-        // Debug input
-        if (Input.GetKeyDown(KeyCode.P))
-        {
-            Debug.Log("current input direction: " + horizontalInput +
-                    ". current speed: " + rb.linearVelocity.x +
-                    ". current rotation: " + rb.rotation);
-        }
-
-        // Handle crouching
         HandleCrouch();
+        HandleSway();
 
         // Attachment keys (delegate to handler)
         if (Input.GetKeyDown(KeyCode.RightArrow))
@@ -162,6 +164,56 @@ public class RobotController : MonoBehaviour
             attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Top);
     }
 
+    void HandleSway()
+    {
+        if (bodySprite == null) return;
+
+        // Target sway based on horizontal input and robot velocity
+        float targetSway = -horizontalInput * swayAmount;
+
+        // Apply smooth damping for natural swaying motion
+        float smoothTime = isGrounded ? 0.1f : 0.3f; // Less responsive in air
+        currentSwayAngle = Mathf.SmoothDamp(currentSwayAngle, targetSway, ref swayVelocity, smoothTime, swaySpeed);
+
+        // Apply sway to the body
+        if (!isCrouching)
+        {
+            // Don't reset z rotation - only modify it
+            Vector3 currentRot = bodySprite.localRotation.eulerAngles;
+            bodySprite.localRotation = Quaternion.Euler(currentRot.x, currentRot.y, currentSwayAngle);
+
+            // Apply the same sway to attachments by rotating the entire transform except wheel
+            if (wheelSprite != null)
+            {
+                // Keep the wheel rotation separate
+                Quaternion wheelRot = wheelSprite.localRotation;
+                transform.localRotation = Quaternion.Euler(0, 0, currentSwayAngle);
+                wheelSprite.localRotation = wheelRot; // Preserve wheel rotation
+            }
+            else
+            {
+                transform.localRotation = Quaternion.Euler(0, 0, currentSwayAngle);
+            }
+        }
+        else
+        {
+            // Less sway when crouching
+            float crouchSwayFactor = 0.5f;
+            Vector3 currentRot = bodySprite.localRotation.eulerAngles;
+            bodySprite.localRotation = Quaternion.Euler(currentRot.x, currentRot.y, currentSwayAngle * crouchSwayFactor);
+
+            if (wheelSprite != null)
+            {
+                Quaternion wheelRot = wheelSprite.localRotation;
+                transform.localRotation = Quaternion.Euler(0, 0, currentSwayAngle * crouchSwayFactor);
+                wheelSprite.localRotation = wheelRot;
+            }
+            else
+            {
+                transform.localRotation = Quaternion.Euler(0, 0, currentSwayAngle * crouchSwayFactor);
+            }
+        }
+    }
 
     void FixedUpdate()
     {
@@ -177,21 +229,17 @@ public class RobotController : MonoBehaviour
         {
             // Only allow vertical movement if horizontal would cause a collision
             rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+
+            // Play bump sound if we tried to move but couldn't
+            if (Mathf.Abs(horizontalInput) > 0.1f && oneSounds != null)
+            {
+                oneSounds.PlayBumpAudio();
+            }
         }
-
-        PlayerMovementH();
-
-
-        PlayerSway();
-
 
         CheckGrounded();
 
-        if (bodySprite != null)
-        {
-            bodySprite.rotation = Quaternion.identity;
-        }
-
+        // We handle body rotation in the HandleSway method now
         if (wheelSprite != null)
         {
             float rotationAmount = -rb.linearVelocity.x * 360f * Time.fixedDeltaTime;
@@ -199,6 +247,7 @@ public class RobotController : MonoBehaviour
         }
     }
 
+    // Check if movement is allowed (won't cause clipping through obstacles)
     bool CanMove(Vector2 velocity)
     {
         // If no horizontal movement, always allow
@@ -207,62 +256,59 @@ public class RobotController : MonoBehaviour
 
         // Get movement direction (1 for right, -1 for left)
         float direction = Mathf.Sign(velocity.x);
+        float moveDistance = Mathf.Abs(velocity.x * Time.fixedDeltaTime);
 
-        // Offset to ignore collisions with ground below
-        float verticalOffset = 0.05f;
+        // Create a starting position slightly above the ground to avoid ground collisions
+        Vector2 castOrigin = (Vector2)transform.position + new Vector2(0, collisionBuffer);
 
-        // Add a small movement buffer to prevent getting stuck on perfectly aligned edges
-        float movementBuffer = 0.03f;
+        // Check robot wheel collider first (this is most important for base movement)
+        if (wheelCollider != null)
+        {
+            RaycastHit2D wheelHit = Physics2D.CircleCast(
+                castOrigin,
+                wheelCollider.radius * 0.95f, // Slightly smaller than actual to avoid edge cases
+                new Vector2(direction, 0),
+                moveDistance,
+                obstacleLayer);
 
-        // Check body colliders first
-        if (bodyCollider != null)
+            if (wheelHit.collider != null)
+            {
+                // Debug visualization
+                Debug.DrawLine(castOrigin, wheelHit.point, Color.red, 0.1f);
+                return false;
+            }
+        }
+
+        // Check body collider
+        if (bodyCollider != null && !isCrouching)
         {
             Vector2 bodyCenter = (Vector2)bodySprite.position + bodyCollider.offset;
 
-            // Ignore collisions slightly below the center to avoid detecting ground
-            RaycastHit2D hit = Physics2D.BoxCast(
+            RaycastHit2D bodyHit = Physics2D.BoxCast(
                 bodyCenter,
-                new Vector2(bodyCollider.size.x - movementBuffer, bodyCollider.size.y - verticalOffset),
-                0f,
+                bodyCollider.size * 0.95f, // Slightly smaller than actual
+                bodySprite.rotation.eulerAngles.z, // Include rotation for accurate collision
                 new Vector2(direction, 0),
-                Mathf.Abs(velocity.x * Time.fixedDeltaTime),
+                moveDistance,
                 obstacleLayer);
 
-            // Only count this as a collision if the hit point is not below us
-            if (hit.collider != null && hit.point.y >= transform.position.y - wheelCollider.radius)
+            if (bodyHit.collider != null)
             {
+                // Debug visualization
+                Debug.DrawLine(bodyCenter, bodyHit.point, Color.red, 0.1f);
                 return false;
             }
         }
 
-        // Check wheel collider (but only the upper half to avoid ground)
-        if (wheelCollider != null)
-        {
-            // Create a slightly smaller circle cast that doesn't touch the ground
-            float adjustedRadius = wheelCollider.radius * 0.8f; // Make it slightly smaller
-            Vector2 adjustedCenter = (Vector2)transform.position + new Vector2(0, wheelCollider.radius * 0.2f); // Move up slightly
-
-            RaycastHit2D hit = Physics2D.CircleCast(
-                adjustedCenter,
-                adjustedRadius - movementBuffer,
-                new Vector2(direction, 0),
-                Mathf.Abs(velocity.x * Time.fixedDeltaTime),
-                obstacleLayer);
-
-            // Only count as collision if hit point is not below us
-            if (hit.collider != null && hit.point.y >= transform.position.y - wheelCollider.radius)
-            {
-                return false;
-            }
-        }
-
-        // Now check all attachment proxy colliders
+        // Check all attachment proxy colliders
         if (attachmentHandler != null)
         {
             List<Collider2D> proxyColliders = attachmentHandler.GetAllProxyColliders();
 
             foreach (Collider2D proxy in proxyColliders)
             {
+                if (proxy == null) continue;
+
                 if (proxy is BoxCollider2D)
                 {
                     BoxCollider2D boxProxy = proxy as BoxCollider2D;
@@ -270,15 +316,16 @@ public class RobotController : MonoBehaviour
 
                     RaycastHit2D hit = Physics2D.BoxCast(
                         proxyCenter,
-                        boxProxy.size - new Vector2(movementBuffer, movementBuffer),
-                        0f,
+                        boxProxy.size,
+                        proxy.transform.rotation.eulerAngles.z, // Include rotation for accurate collision
                         new Vector2(direction, 0),
-                        Mathf.Abs(velocity.x * Time.fixedDeltaTime),
+                        moveDistance,
                         obstacleLayer);
 
-                    // Only count as collision if hit point is not below the wheel
-                    if (hit.collider != null && hit.point.y >= transform.position.y - wheelCollider.radius)
+                    if (hit.collider != null)
                     {
+                        // Debug visualization
+                        Debug.DrawLine(proxyCenter, hit.point, Color.red, 0.1f);
                         return false;
                     }
                 }
@@ -289,14 +336,15 @@ public class RobotController : MonoBehaviour
 
                     RaycastHit2D hit = Physics2D.CircleCast(
                         proxyCenter,
-                        circleProxy.radius - movementBuffer,
+                        circleProxy.radius,
                         new Vector2(direction, 0),
-                        Mathf.Abs(velocity.x * Time.fixedDeltaTime),
+                        moveDistance,
                         obstacleLayer);
 
-                    // Only count as collision if hit point is not below the wheel
-                    if (hit.collider != null && hit.point.y >= transform.position.y - wheelCollider.radius)
+                    if (hit.collider != null)
                     {
+                        // Debug visualization
+                        Debug.DrawLine(proxyCenter, hit.point, Color.red, 0.1f);
                         return false;
                     }
                 }
@@ -322,12 +370,6 @@ public class RobotController : MonoBehaviour
                      (hitRight.collider != null && hitRight.collider.gameObject != gameObject && hitRight.collider.gameObject != bodySprite.gameObject);
     }
 
-    void OnCollisionEnter2D(Collision2D collision)
-    {
-        OneSoundEffects robot = GetComponent<OneSoundEffects>();
-        robot.PlayBumpAudio();
-    }
-
     void OnCollisionStay2D(Collision2D collision)
     {
         for (int i = 0; i < collision.contactCount; i++)
@@ -343,19 +385,54 @@ public class RobotController : MonoBehaviour
         }
     }
 
+    // Improved ceiling check with multiple raycasts
+    bool CanStandUp()
+    {
+        if (ceilingCheck == null)
+        {
+            Debug.LogWarning("No ceiling check transform assigned!");
+            return true; // Default to allowing stand if not set up properly
+        }
+
+        // Use a wider check area to catch any potential ceiling obstacles
+        float checkWidth = bodyCollider.size.x * 0.8f;
+        int numChecks = 5; // Use multiple points to check
+
+        for (int i = 0; i < numChecks; i++)
+        {
+            // Calculate position across the width of the collider
+            float xOffset = -checkWidth / 2 + (i * checkWidth / (numChecks - 1));
+            Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(xOffset, 0);
+
+            // Visual debug
+            Debug.DrawRay(checkPos, Vector2.up * ceilingCheckRadius, Color.yellow, 0.1f);
+
+            // Check for ceiling
+            Collider2D hitCeiling = Physics2D.OverlapCircle(checkPos, ceilingCheckRadius, groundLayer);
+            if (hitCeiling != null)
+            {
+                return false; // Can't stand up, something is above
+            }
+        }
+
+        return true; // All checks passed, can stand up
+    }
+
     void HandleCrouch()
     {
         if (bodySprite != null)
         {
             if (Input.GetKey(KeyCode.S))
             {
-                OneSoundEffects robot = GetComponent<OneSoundEffects>();
-                if (!isCrouching)
+                // Only play crouch sound when initially crouching
+                if (!isCrouching && oneSounds != null)
                 {
-                    robot.PlayCrouchAudio();
+                    oneSounds.PlayCrouchAudio();
                 }
 
                 isCrouching = true;
+                isAttemptingToStand = false;
+
                 Vector3 targetPos = new Vector3(originalBodyPosition.x, originalBodyPosition.y - crouchAmount, originalBodyPosition.z);
                 bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, targetPos, Time.deltaTime * crouchSpeed);
 
@@ -378,14 +455,17 @@ public class RobotController : MonoBehaviour
             }
             else if (isCrouching)
             {
-                bool canStand = !Physics2D.OverlapCircle(ceilingCheck.position, ceilingCheckRadius, groundLayer);
-                OneSoundEffects robot = GetComponent<OneSoundEffects>();
-                robot.PlayUncrouchAudio();
-
-                bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
+                isAttemptingToStand = true;
+                bool canStand = CanStandUp();
 
                 if (canStand)
                 {
+                    // Only play uncrouch sound when starting to uncrouch
+                    if (isAttemptingToStand && Vector3.Distance(bodySprite.localPosition, originalBodyPosition) > 0.05f && oneSounds != null)
+                    {
+                        oneSounds.PlayUncrouchAudio();
+                    }
+
                     bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, originalBodyPosition, Time.deltaTime * crouchSpeed);
 
                     if (bodyMiddle != null)
@@ -402,6 +482,7 @@ public class RobotController : MonoBehaviour
                     if (Vector3.Distance(bodySprite.localPosition, originalBodyPosition) < 0.01f)
                     {
                         isCrouching = false;
+                        isAttemptingToStand = false;
                         bodySprite.localPosition = originalBodyPosition;
                         if (bodyMiddle != null) bodyMiddle.localPosition = originalBodyMiddlePosition;
 
@@ -412,85 +493,38 @@ public class RobotController : MonoBehaviour
                         }
                     }
                 }
-            }
-        }
-    }
-
-
-
-    void PlayerMovementH()
-    {
-        float h_velocity = 0;
-        int momentumDir = Math.Sign(rb.linearVelocity.x);
-        float h_speed = Math.Abs(rb.linearVelocity.x);
-        if (horizontalInput != 0)
-        {
-            LoopSoundEffects robot = GetComponent<LoopSoundEffects>();
-            robot.PlayMoveAudio();
-
-            h_velocity = (hAcceleration / (1 + totalWeight));
-            if (h_speed + h_velocity >= maxSpeed / (1 + totalWeight))
-            {
-                h_velocity = 0;
-                rb.linearVelocity = new Vector2(maxSpeed / (1 + totalWeight) * horizontalInput, rb.linearVelocity.y);
-            }
-            else
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x + (h_velocity * horizontalInput), rb.linearVelocity.y);
-            }
-        }
-        else
-        {
-            LoopSoundEffects robot = GetComponent<LoopSoundEffects>();
-            robot.StopAudio();
-
-            h_velocity = momentumDir * hFriction * (1 + totalWeight);
-            if (h_speed - (momentumDir * h_velocity) > 0)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x - h_velocity, rb.linearVelocity.y);
-            }
-            else
-            {
-                h_velocity = 0;
-                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
-            }
-        }
-    }
-
-
-
-    void PlayerSway()
-    {
-        float playerRotation = rb.rotation;
-
-        if (horizontalInput != 0)
-        {
-            // Commented section is for possible "bounce" in player sway at initial movement
-            //if(swayImpulse){}
-
-            // Math.Log((Math.Abs(rb.velocity.x) , 2)
-
-            // player sway on movement press
-            if (Math.Abs(rb.rotation) <= maxSwayAngle)
-            {
-                playerRotation += (Math.Abs(rb.linearVelocity.x)) * (swaySpeedRatio) * horizontalInput;
-                if (playerRotation <= maxSwayAngle)
-                {
-                    rb.rotation = playerRotation;
-                }
                 else
                 {
-                    playerRotation = horizontalInput * maxSwayAngle;
-                    rb.rotation = playerRotation;
+                    // We tried to stand but couldn't - keep crouched
+                    Vector3 targetPos = new Vector3(originalBodyPosition.x, originalBodyPosition.y - crouchAmount, originalBodyPosition.z);
+                    bodySprite.localPosition = Vector3.Lerp(bodySprite.localPosition, targetPos, Time.deltaTime * crouchSpeed);
+
+                    if (bodyMiddle != null)
+                    {
+                        Vector3 middleTargetPos = new Vector3(originalBodyMiddlePosition.x, originalBodyMiddlePosition.y - crouchAmount, originalBodyMiddlePosition.z);
+                        bodyMiddle.localPosition = Vector3.Lerp(bodyMiddle.localPosition, middleTargetPos, Time.deltaTime * crouchSpeed);
+                    }
                 }
             }
-
         }
-        else if (playerRotation != 0)
+    }
+
+    // Add visual debugging
+    void OnDrawGizmos()
+    {
+        if (Application.isPlaying && ceilingCheck != null)
         {
-            playerRotation += -Math.Sign(playerRotation) * ((float)Math.Pow(2, Math.Abs(playerRotation) / 16) - 1) * swaySpeedRatio;
-            rb.rotation = playerRotation;
-        }
+            // Visualize ceiling check area
+            float checkWidth = bodyCollider != null ? bodyCollider.size.x * 0.8f : 0.8f;
+            int numChecks = 5;
 
+            Gizmos.color = CanStandUp() ? Color.green : Color.red;
+            for (int i = 0; i < numChecks; i++)
+            {
+                float xOffset = -checkWidth / 2 + (i * checkWidth / (numChecks - 1));
+                Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(xOffset, 0);
+                Gizmos.DrawWireSphere(checkPos, ceilingCheckRadius);
+            }
+        }
     }
 }

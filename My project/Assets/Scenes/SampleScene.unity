@@ -346,7 +346,6 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 298060895}
   - {fileID: 927671650}
   - {fileID: 995911013}
   - {fileID: 230200551}
@@ -368,13 +367,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   moveSpeed: 5
   jumpForce: 8
-  hAcceleration: 0.5
-  hFriction: 2
-  maxSpeed: 5
-  totalWeight: 0
-  maxSwayAngle: 25
-  maxSwayImpulse: 30
-  swaySpeedRatio: 0.7
   groundCheckDistance: 0.1
   bodySprite: {fileID: 995911013}
   bodyMiddle: {fileID: 230200551}
@@ -383,6 +375,9 @@ MonoBehaviour:
   crouchAmount: 0.6
   crouchSpeed: 5
   crouchColliderReduction: 0.5
+  swayAmount: 10
+  swaySpeed: 100
+  swayResponsiveness: 10
   ceilingCheck: {fileID: 338481530}
   ceilingCheckRadius: 0.1
   groundLayer:
@@ -392,6 +387,7 @@ MonoBehaviour:
   obstacleLayer:
     serializedVersion: 2
     m_Bits: 256
+  collisionBuffer: 0.05
 --- !u!114 &33954760
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1778,6 +1774,7 @@ AudioSource:
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
   m_PlayOnAwake: 1
   m_Volume: 1
   m_Pitch: 1
@@ -2347,3 +2344,4 @@ SceneRoots:
   - {fileID: 1787102363}
   - {fileID: 11813492}
   - {fileID: 1145527707}
+  - {fileID: 1749028694}
