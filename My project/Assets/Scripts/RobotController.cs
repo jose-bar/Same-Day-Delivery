@@ -6,14 +6,14 @@ public class RobotController : MonoBehaviour
 {
     [Header("Movement Settings")]
     public float maxMoveSpeed = 5f;
-    public float acceleration = 25f;     // How quickly the robot accelerates
-    public float deceleration = 40f;     // How quickly the robot decelerates when no input
-    private float currentMoveVelocity = 0f; // Current horizontal velocity
+    public float acceleration = 25f;
+    public float deceleration = 40f;
+    private float currentMoveVelocity = 0f;
     public float jumpForce = 8f;
 
     [Header("Ground Check")]
     public float groundCheckDistance = 0.6f;
-    public float groundedBufferTime = 0.1f; // Time to remember being grounded (helps with jump timing)
+    public float groundedBufferTime = 0.1f;
     private float lastGroundedTime = 0f;
 
     [Header("Body Settings")]
@@ -29,12 +29,11 @@ public class RobotController : MonoBehaviour
     public float crouchColliderReduction = 0.5f;
 
     [Header("Sway Settings")]
-    public float swayAmount = 0.1f;      // Amount of sway
-    public float swaySpeed = 3f;         // Speed of sway
-    public float swayResponsiveness = 5f; // How responsive the sway is to input change
-    private float currentSwayAngle = 0f;  // Current sway angle
-    private float swayVelocity = 0f;      // Current sway velocity for smooth damping
-    private float lastSafeSwayAngle = 0f; // Last sway angle that didn't cause clipping
+    public float swayAmount = 0.1f;
+    public float swaySpeed = 3f;
+    public float swayResponsiveness = 5f;
+    private float currentSwayAngle = 0f;
+    private float swayVelocity = 0f;
 
     private Rigidbody2D rb;
     private CircleCollider2D wheelCollider;
@@ -48,7 +47,7 @@ public class RobotController : MonoBehaviour
     public Transform ceilingCheck;
     public float ceilingCheckRadius = 0.1f;
     public LayerMask groundLayer;
-    public float sideCheckDistance = 0.2f; // Distance to check for side obstacles when uncrouching
+    public float sideCheckDistance = 0.2f;
 
     private Vector3 originalBodyPosition;
     private Vector2 originalBodyColliderSize;
@@ -57,16 +56,34 @@ public class RobotController : MonoBehaviour
     [Header("Attachment")]
     public AttachmentHandler attachmentHandler;
 
-    [Header("Movement Validation")]
-    public LayerMask obstacleLayer; // Same layer mask as in AttachmentHandler
-    public float collisionBuffer = 0.05f; // Buffer to prevent getting stuck on edges
-
-    [Header("Physics")]
-    public bool allowBottomCollisions = true; // Whether items can hit obstacles from below
-
     // Sound effects
     private LoopSoundEffects loopSounds;
     private OneSoundEffects oneSounds;
+
+    [Header("Proxy Collision")]
+    public float collisionBounceForce = 0.5f;
+    public float collisionPushbackDelay = 0.1f;
+    private bool isHandlingProxyCollision = false;
+    private Vector2 collisionNormal;
+
+    // Position freezing
+    private bool isAttachmentFreezing = false;
+    private float freezeTimer = 0f;
+    private Vector3 savedPosition;
+
+    // Proxy collision enabling
+    private bool proxyCollisionsEnabled = true;
+    private float collisionDisableTimer = 0f;
+
+    // Trigger-based collision handling
+    private bool isTriggerBlocking = false;
+    private Vector2 blockedDirection = Vector2.zero;
+    private float triggerBlockResetTime = 0f;
+
+    // Stable position tracking to prevent sinking
+    private Vector3 lastStablePosition;
+    private bool isTrackingStablePosition = false;
+    private float stablePositionTimer = 0f;
 
     void Start()
     {
@@ -137,6 +154,29 @@ public class RobotController : MonoBehaviour
 
     void Update()
     {
+        // Track stable position when not moving horizontally
+        if (Mathf.Abs(horizontalInput) < 0.1f && isGrounded && !isCrouching)
+        {
+            if (!isTrackingStablePosition)
+            {
+                isTrackingStablePosition = true;
+                stablePositionTimer = 0.1f; // Short delay before considering position stable
+            }
+            else
+            {
+                stablePositionTimer -= Time.deltaTime;
+                if (stablePositionTimer <= 0)
+                {
+                    // Store position as stable reference
+                    lastStablePosition = transform.position;
+                }
+            }
+        }
+        else
+        {
+            isTrackingStablePosition = false;
+        }
+
         horizontalInput = 0f;
 
         if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
@@ -162,12 +202,73 @@ public class RobotController : MonoBehaviour
         bool canJump = Time.time - lastGroundedTime < groundedBufferTime;
         if (Input.GetKeyDown(KeyCode.Space) && canJump)
         {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
-            rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
-            isGrounded = false;
+            // Check if jumping would cause attached items to clip through ceilings
+            bool canJumpWithAttachments = true;
 
-            // Play jump sound
-            if (oneSounds != null) oneSounds.PlayJumpAudio();
+            List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
+            foreach (GameObject item in attachedItems)
+            {
+                if (item == null) continue;
+
+                Collider2D itemCollider = item.GetComponent<Collider2D>();
+                if (itemCollider == null) continue;
+
+                // Get current bounds
+                Bounds itemBounds = itemCollider.bounds;
+
+                // Create expanded bounds to check for jump clearance
+                Bounds jumpBounds = itemBounds;
+                jumpBounds.Expand(new Vector3(0.02f, 0.15f, 0)); // Expand slightly, more vertically
+
+                // Move up to simulate jump
+                jumpBounds.center += new Vector3(0, 0.2f, 0);
+
+                // Check if there's a ceiling or obstacle in the way
+                Collider2D[] hits = Physics2D.OverlapBoxAll(
+                    jumpBounds.center,
+                    jumpBounds.size,
+                    0f,
+                    groundLayer
+                );
+
+                foreach (Collider2D hit in hits)
+                {
+                    // Skip robot and attachments
+                    if (hit.gameObject == gameObject ||
+                        hit.transform.IsChildOf(transform) ||
+                        hit.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) ||
+                        hit.CompareTag("ProxyCollider"))
+                    {
+                        continue;
+                    }
+
+                    // Found an obstacle - can't jump
+                    canJumpWithAttachments = false;
+                    break;
+                }
+
+                if (!canJumpWithAttachments) break;
+            }
+
+            // Only jump if we can do so safely
+            if (canJumpWithAttachments || attachedItems.Count == 0)
+            {
+                // Basic jump - physics system will handle collision constraints
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
+                rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+                isGrounded = false;
+
+                // Play jump sound
+                if (oneSounds != null) oneSounds.PlayJumpAudio();
+            }
+            else
+            {
+                // Can't jump - play bump sound to indicate blocked
+                if (oneSounds != null && !oneSounds.src2.isPlaying)
+                {
+                    oneSounds.PlayBumpAudio();
+                }
+            }
         }
 
         HandleCrouch();
@@ -180,6 +281,48 @@ public class RobotController : MonoBehaviour
             attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Left);
         else if (Input.GetKeyDown(KeyCode.UpArrow))
             attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Top);
+
+        // Handle position freezing for attachment
+        if (isAttachmentFreezing)
+        {
+            freezeTimer -= Time.deltaTime;
+
+            // Force position to stay the same during freeze
+            transform.position = savedPosition;
+
+            // Set velocity to zero
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+            }
+
+            // Cancel freezing if timer expired
+            if (freezeTimer <= 0)
+            {
+                isAttachmentFreezing = false;
+            }
+        }
+
+        // Handle collision disable timer
+        if (!proxyCollisionsEnabled)
+        {
+            collisionDisableTimer -= Time.deltaTime;
+            if (collisionDisableTimer <= 0)
+            {
+                proxyCollisionsEnabled = true;
+            }
+        }
+
+        // Handle trigger blocking timer
+        if (isTriggerBlocking)
+        {
+            triggerBlockResetTime -= Time.deltaTime;
+            if (triggerBlockResetTime <= 0)
+            {
+                isTriggerBlocking = false;
+                blockedDirection = Vector2.zero;
+            }
+        }
     }
 
     void HandleSway()
@@ -191,41 +334,14 @@ public class RobotController : MonoBehaviour
 
         // Apply smooth damping for natural swaying motion
         float smoothTime = isGrounded ? 0.1f : 0.3f; // Less responsive in air
-        float previousSwayAngle = currentSwayAngle;
-        currentSwayAngle = Mathf.SmoothDamp(currentSwayAngle, targetSway, ref swayVelocity, smoothTime, swaySpeed);
+        float newSwayAngle = Mathf.SmoothDamp(currentSwayAngle, targetSway, ref swayVelocity, smoothTime, swaySpeed);
 
-        // Check if the new sway angle would cause any attached items to clip through obstacles
-        if (WouldSwayAngleCauseClipping(currentSwayAngle))
-        {
-            // If it would cause clipping, revert to the previous angle
-            currentSwayAngle = previousSwayAngle;
-            swayVelocity = 0f; // Reset velocity to prevent oscillation
+        // Check if the new sway angle would cause clipping and get a safe angle if it would
+        float safeAngle = newSwayAngle;
+        bool wouldClip = WouldSwayAngleCauseClipping(newSwayAngle, out safeAngle);
 
-            // Try to find a safe angle between the current and target
-            float testAngle = currentSwayAngle;
-            float step = (targetSway - currentSwayAngle) / 10f; // Test 10 steps
-
-            // Only try to find safe angle if we're moving toward the target
-            if (Mathf.Abs(step) > 0.001f)
-            {
-                for (int i = 0; i < 10; i++)
-                {
-                    testAngle += step;
-                    if (!WouldSwayAngleCauseClipping(testAngle))
-                    {
-                        // Found a safe angle
-                        currentSwayAngle = testAngle;
-                        lastSafeSwayAngle = testAngle;
-                        break;
-                    }
-                }
-            }
-        }
-        else
-        {
-            // If the angle is safe, remember it
-            lastSafeSwayAngle = currentSwayAngle;
-        }
+        // Use the safe angle
+        currentSwayAngle = safeAngle;
 
         // Apply sway to the body
         if (!isCrouching)
@@ -269,76 +385,169 @@ public class RobotController : MonoBehaviour
         }
     }
 
-    // Check if a given sway angle would cause any attached items to clip through obstacles
-    bool WouldSwayAngleCauseClipping(float swayAngle)
+    private bool WouldSwayAngleCauseClipping(float swayAngle, out float maxSafeAngle)
     {
-        if (attachmentHandler == null) return false;
+        maxSafeAngle = swayAngle; // Default to requested angle
 
-        // Get all attached items
-        List<GameObject> allAttachedItems = GetAllAttachedItems();
-        if (allAttachedItems.Count == 0) return false;
+        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
+        if (attachedItems.Count == 0) return false;
 
-        // Store current rotation
+        // Store the current rotation and position
         Quaternion originalRotation = transform.rotation;
+        Vector3 originalPosition = transform.position;
 
-        // Temporarily rotate to test angle
+        // Try the proposed rotation
         transform.rotation = Quaternion.Euler(0, 0, swayAngle);
 
         bool wouldClip = false;
+        float bestAngle = swayAngle;
 
-        // Check each attached item for potential collisions
-        foreach (GameObject item in allAttachedItems)
+        // Check if any attached items would clip in this rotation
+        foreach (GameObject item in attachedItems)
         {
             if (item == null) continue;
 
             Collider2D itemCollider = item.GetComponent<Collider2D>();
             if (itemCollider == null) continue;
 
-            // Store current state
-            bool wasEnabled = itemCollider.enabled;
-            itemCollider.enabled = true;
-
-            // Get bounds at this rotation
+            // Get the current bounds after rotation
             Bounds itemBounds = itemCollider.bounds;
 
-            // Check for overlaps with obstacles
-            Collider2D[] overlaps = Physics2D.OverlapBoxAll(
-                itemBounds.center,
-                itemBounds.size * 0.95f, // Slightly smaller to avoid edge cases
-                swayAngle,
-                obstacleLayer);
+            // Add a small expansion to catch near-clips
+            Bounds checkBounds = itemBounds;
+            checkBounds.Expand(new Vector3(0.02f, 0.02f, 0));
 
-            // Filter out self-collisions
+            // Check for overlaps
+            Collider2D[] overlaps = Physics2D.OverlapBoxAll(
+                checkBounds.center,
+                checkBounds.size,
+                0f,
+                groundLayer
+            );
+
             foreach (Collider2D overlap in overlaps)
             {
-                if (overlap.gameObject != gameObject &&
-                    !overlap.transform.IsChildOf(transform) &&
-                    !transform.IsChildOf(overlap.transform))
+                // Skip if it's part of the robot or its attachments
+                if (overlap.gameObject == gameObject ||
+                    overlap.transform.IsChildOf(transform) ||
+                    overlap.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) ||
+                    overlap.CompareTag("ProxyCollider"))
                 {
-                    wouldClip = true;
-                    break;
+                    continue;
                 }
-            }
 
-            // Restore collider state
-            itemCollider.enabled = wasEnabled;
+                // Found a real overlap
+                wouldClip = true;
+
+                // Try to find a safe angle
+                if (Mathf.Abs(swayAngle) > 0.1f)
+                {
+                    // Binary search for the maximum safe angle
+                    float minAngle = 0;
+                    float maxAngle = swayAngle;
+                    float currentTestAngle;
+
+                    // If swayAngle is negative, adjust the search range
+                    if (swayAngle < 0)
+                    {
+                        minAngle = swayAngle;
+                        maxAngle = 0;
+                    }
+
+                    // Do a few iterations to find a good safe angle
+                    for (int i = 0; i < 5; i++)
+                    {
+                        currentTestAngle = (minAngle + maxAngle) / 2;
+
+                        // Test this angle
+                        transform.rotation = Quaternion.Euler(0, 0, currentTestAngle);
+
+                        // Get the updated bounds
+                        Bounds testBounds = itemCollider.bounds;
+                        testBounds.Expand(new Vector3(0.01f, 0.01f, 0));
+
+                        // Check if this angle causes clipping
+                        bool testClips = false;
+                        Collider2D[] testOverlaps = Physics2D.OverlapBoxAll(
+                            testBounds.center,
+                            testBounds.size,
+                            0f,
+                            groundLayer
+                        );
+
+                        foreach (Collider2D testOverlap in testOverlaps)
+                        {
+                            if (testOverlap.gameObject == gameObject ||
+                                testOverlap.transform.IsChildOf(transform) ||
+                                testOverlap.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) ||
+                                testOverlap.CompareTag("ProxyCollider"))
+                            {
+                                continue;
+                            }
+
+                            testClips = true;
+                            break;
+                        }
+
+                        // Adjust the search range
+                        if (testClips)
+                        {
+                            if (swayAngle > 0)
+                                maxAngle = currentTestAngle;
+                            else
+                                minAngle = currentTestAngle;
+                        }
+                        else
+                        {
+                            if (swayAngle > 0)
+                                minAngle = currentTestAngle;
+                            else
+                                maxAngle = currentTestAngle;
+
+                            // This is a safe angle, remember it
+                            bestAngle = currentTestAngle;
+                        }
+                    }
+                }
+
+                break;
+            }
 
             if (wouldClip) break;
         }
 
-        // Restore original rotation
+        // Restore the original rotation and position
         transform.rotation = originalRotation;
+        transform.position = originalPosition; // IMPORTANT: Restore position too
+
+        // Return the best safe angle we found
+        maxSafeAngle = bestAngle;
 
         return wouldClip;
     }
 
     void FixedUpdate()
     {
-        // Handling acceleration-based movement
+        // Skip normal movement updates if freezing
+        if (isAttachmentFreezing) return;
+
+        // Calculate target velocity based on input
         float targetVelocity = horizontalInput * maxMoveSpeed;
 
-        // Apply acceleration or deceleration based on input
-        if (horizontalInput != 0)
+        // Check if we're trying to move into a blocked direction
+        if (isTriggerBlocking)
+        {
+            // If we're trying to move in the general direction of the block
+            float dot = Vector2.Dot(new Vector2(targetVelocity, 0), blockedDirection);
+            if (dot > 0)
+            {
+                // We're pushing against a block - prevent movement in this direction
+                targetVelocity = 0;
+            }
+        }
+
+        // Apply acceleration or deceleration
+        if (horizontalInput != 0 && targetVelocity != 0)
         {
             // Accelerate toward target velocity
             currentMoveVelocity = Mathf.MoveTowards(
@@ -348,38 +557,26 @@ public class RobotController : MonoBehaviour
         }
         else
         {
-            // Decelerate toward zero when no input
+            // Decelerate toward zero when no input or blocked
             currentMoveVelocity = Mathf.MoveTowards(
                 currentMoveVelocity,
                 0f,
                 deceleration * Time.fixedDeltaTime);
         }
 
-        // Create the intended velocity vector
-        Vector2 intendedVelocity = new Vector2(currentMoveVelocity, rb.linearVelocity.y);
+        // IMPORTANT: First store the current vertical velocity since PreventClipping might modify it
+        float currentVerticalVelocity = rb.linearVelocity.y;
 
-        // Check if the movement would cause collisions
-        if (CanMove(intendedVelocity))
-        {
-            rb.linearVelocity = intendedVelocity;
-        }
-        else
-        {
-            // If movement not allowed, stop horizontal movement but keep vertical
-            currentMoveVelocity = 0f; // Reset current velocity
-            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+        // Set initial horizontal velocity (vertical will be managed by PreventClipping)
+        rb.linearVelocity = new Vector2(currentMoveVelocity, currentVerticalVelocity);
 
-            // Play bump sound if we tried to move but couldn't
-            if (Mathf.Abs(horizontalInput) > 0.1f && oneSounds != null)
-            {
-                oneSounds.PlayBumpAudio();
-            }
-        }
+        // Run the clipping prevention check AFTER setting initial velocity
+        PreventClipping();
 
+        // Check if we're grounded
         CheckGrounded();
-        CheckForAttachmentBottomCollisions();
 
-        // We handle body rotation in the HandleSway method now
+        // Animate wheel rotation
         if (wheelSprite != null)
         {
             float rotationAmount = -rb.linearVelocity.x * 360f * Time.fixedDeltaTime;
@@ -387,177 +584,238 @@ public class RobotController : MonoBehaviour
         }
     }
 
-    // Check if movement is allowed (won't cause clipping through obstacles)
-    bool CanMove(Vector2 velocity)
+    private void PreventClipping()
     {
-        // If no horizontal movement, always allow
-        if (Mathf.Approximately(velocity.x, 0f))
-            return true;
+        // Get the attached items
+        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
+        if (attachedItems.Count == 0) return;
 
-        // Get movement direction (1 for right, -1 for left)
-        float direction = Mathf.Sign(velocity.x);
-        float moveDistance = Mathf.Abs(velocity.x * Time.fixedDeltaTime);
+        // Get current velocity (both horizontal and vertical)
+        Vector2 currentVelocity = rb.linearVelocity;
+        bool horizontalMovement = Mathf.Abs(currentMoveVelocity) > 0.01f;
+        bool verticalMovement = Mathf.Abs(currentVelocity.y) > 0.01f;
 
-        // Create a starting position slightly above the ground to avoid ground collisions
-        Vector2 castOrigin = (Vector2)transform.position + new Vector2(0, collisionBuffer);
+        // If we're not moving at all, no need to check
+        if (!horizontalMovement && !verticalMovement) return;
 
-        // Check robot wheel collider first (this is most important for base movement)
-        if (wheelCollider != null)
+        // Create movement direction vector
+        Vector2 moveDir = new Vector2(
+            horizontalMovement ? Mathf.Sign(currentMoveVelocity) : 0,
+            verticalMovement ? Mathf.Sign(currentVelocity.y) : 0
+        );
+
+        // Check if moving would cause clipping
+        bool wouldClipHorizontal = false;
+        bool wouldClipVertical = false;
+
+        // Store the deepest penetration to correct position if needed
+        float horizontalPenetration = 0f;
+        float verticalPenetration = 0f;
+
+        foreach (GameObject item in attachedItems)
         {
-            // Only check for horizontal collisions, not vertical
-            RaycastHit2D wheelHit = Physics2D.CircleCast(
-                castOrigin,
-                wheelCollider.radius * 0.95f, // Slightly smaller than actual to avoid edge cases
-                new Vector2(direction, 0),
-                moveDistance,
-                obstacleLayer);
+            if (item == null) continue;
 
-            if (wheelHit.collider != null)
+            // Get the collider of the item
+            Collider2D itemCollider = item.GetComponent<Collider2D>();
+            if (itemCollider == null) continue;
+
+            // Get the bounds of the item's collider
+            Bounds itemBounds = itemCollider.bounds;
+
+            // IMPORTANT: Use much larger horizontal expansion to prevent any wall clipping
+            Vector3 expansion = new Vector3(
+                (horizontalMovement ? Mathf.Abs(moveDir.x) * 0.2f : 0) + 0.05f, // Increased horizontal expansion
+                (verticalMovement ? Mathf.Abs(moveDir.y) * 0.1f : 0) + 0.03f,   // Slight increase to vertical
+                0
+            );
+
+            // Create a larger bounds for checking
+            Bounds checkBounds = itemBounds;
+            checkBounds.Expand(expansion);
+
+            // Calculate movement offset (how far we would move in one frame)
+            Vector3 offset = new Vector3(
+                horizontalMovement ? moveDir.x * Mathf.Abs(currentMoveVelocity) * Time.fixedDeltaTime : 0,
+                verticalMovement ? moveDir.y * Mathf.Abs(currentVelocity.y) * Time.fixedDeltaTime : 0,
+                0
+            );
+
+            // Don't make the offset too large or we might miss collisions
+            offset = Vector3.ClampMagnitude(offset, 0.2f);
+
+            // Move the check bounds in the direction of movement
+            checkBounds.center += offset;
+
+            // Check for overlaps with the environment
+            Collider2D[] overlaps = Physics2D.OverlapBoxAll(
+                checkBounds.center,
+                checkBounds.size,
+                0f,
+                groundLayer
+            );
+
+            // Also check for current overlaps to handle existing intersections
+            Collider2D[] currentOverlaps = Physics2D.OverlapBoxAll(
+                itemBounds.center,
+                itemBounds.size * 0.98f, // Slightly smaller to avoid edge cases
+                0f,
+                groundLayer
+            );
+
+            // Combine all overlaps for processing
+            List<Collider2D> allOverlaps = new List<Collider2D>(overlaps);
+            foreach (Collider2D col in currentOverlaps)
             {
-                // Only block if we're not trying to move onto a platform
-                Vector2 hitNormal = wheelHit.normal;
-                float angle = Vector2.Angle(hitNormal, Vector2.up);
-                if (angle > 30f) // Not a flat surface we can roll on
+                if (!allOverlaps.Contains(col))
                 {
-                    // Debug visualization
-                    Debug.DrawLine(castOrigin, wheelHit.point, Color.red, 0.1f);
-                    return false;
+                    allOverlaps.Add(col);
+                }
+            }
+
+            // Filter out overlaps with the robot and attachments
+            foreach (Collider2D overlap in allOverlaps)
+            {
+                // Skip if it's part of the robot or its attachments
+                if (overlap.gameObject == gameObject ||
+                    overlap.transform.IsChildOf(transform) ||
+                    overlap.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) ||
+                    overlap.CompareTag("ProxyCollider"))
+                {
+                    continue;
+                }
+
+                // Get the overlap bounds
+                Bounds overlapBounds = overlap.bounds;
+
+                // Calculate penetration depths in both axes
+                float xPenetration = 0f;
+                float yPenetration = 0f;
+
+                // Check if actually overlapping
+                if (itemBounds.Intersects(overlapBounds))
+                {
+                    // Calculate penetration in both axes
+                    float xMin = Mathf.Max(itemBounds.min.x, overlapBounds.min.x);
+                    float xMax = Mathf.Min(itemBounds.max.x, overlapBounds.max.x);
+                    float yMin = Mathf.Max(itemBounds.min.y, overlapBounds.min.y);
+                    float yMax = Mathf.Min(itemBounds.max.y, overlapBounds.max.y);
+
+                    xPenetration = xMax - xMin;
+                    yPenetration = yMax - yMin;
+
+                    // Update max penetration
+                    horizontalPenetration = Mathf.Max(horizontalPenetration, xPenetration);
+                    verticalPenetration = Mathf.Max(verticalPenetration, yPenetration);
+                }
+
+                // Found a real overlap - determine if it's horizontal or vertical
+                Vector2 overlapDirection = (Vector2)(checkBounds.center - itemBounds.center).normalized;
+
+                // Determine if this is primarily horizontal or vertical movement
+                float horizontalAlignment = Mathf.Abs(Vector2.Dot(overlapDirection, Vector2.right));
+                float verticalAlignment = Mathf.Abs(Vector2.Dot(overlapDirection, Vector2.up));
+
+                // Decide which direction to block based on alignment and movement
+                if (horizontalAlignment > verticalAlignment ||
+                    (horizontalAlignment > 0.3f && horizontalMovement))
+                {
+                    wouldClipHorizontal = true;
+                }
+
+                if (verticalAlignment > horizontalAlignment ||
+                    (verticalAlignment > 0.3f && verticalMovement))
+                {
+                    wouldClipVertical = true;
+                }
+
+                // If we see significant overlap, be conservative and block both
+                if (xPenetration > 0.02f && yPenetration > 0.02f)
+                {
+                    wouldClipHorizontal = true;
+                    wouldClipVertical = true;
                 }
             }
         }
 
-        // Check body collider
-        if (bodyCollider != null && !isCrouching)
+        // Prevent horizontal movement if we would clip
+        if (wouldClipHorizontal && horizontalMovement)
         {
-            Vector2 bodyCenter = (Vector2)bodySprite.position + bodyCollider.offset;
+            // Completely stop horizontal movement
+            currentMoveVelocity = 0;
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
 
-            RaycastHit2D bodyHit = Physics2D.BoxCast(
-                bodyCenter,
-                bodyCollider.size * 0.95f, // Slightly smaller than actual
-                bodySprite.rotation.eulerAngles.z, // Include rotation for accurate collision
-                new Vector2(direction, 0),
-                moveDistance,
-                obstacleLayer);
-
-            if (bodyHit.collider != null)
+            // If there's penetration, push back slightly to prevent visible clipping
+            if (horizontalPenetration > 0.01f)
             {
-                // Only block if we're not trying to move onto a platform
-                Vector2 hitNormal = bodyHit.normal;
-                float angle = Vector2.Angle(hitNormal, Vector2.up);
-                if (angle > 30f) // Not a flat surface we can roll on
+                // IMPORTANT: Store current Y position
+                float currentY = transform.position.y;
+
+                // Move slightly away from the wall (in the opposite direction of movement)
+                float correctionAmount = Mathf.Min(horizontalPenetration, 0.01f);
+                Vector3 correction = new Vector3(-moveDir.x * correctionAmount, 0, 0);
+                transform.position += correction;
+
+                // CRITICAL FIX: Restore original Y position to prevent sinking
+                transform.position = new Vector3(transform.position.x, currentY, transform.position.z);
+
+                // If we have a last stable position and we're significantly lower than it,
+                // restore to closer to the stable height to fix any accumulated sinking
+                if (lastStablePosition != Vector3.zero &&
+                    transform.position.y < lastStablePosition.y - 0.05f)
                 {
-                    // Debug visualization
-                    Debug.DrawLine(bodyCenter, bodyHit.point, Color.red, 0.1f);
-                    return false;
+                    // Gradually move back toward stable height
+                    float correctionY = Mathf.Min(
+                        (lastStablePosition.y - transform.position.y) * 0.5f,
+                        0.05f
+                    );
+                    transform.position = new Vector3(
+                        transform.position.x,
+                        transform.position.y + correctionY,
+                        transform.position.z
+                    );
                 }
             }
         }
 
-        // Check all attachment proxy colliders
-        if (attachmentHandler != null)
+        // Prevent vertical movement if we would clip
+        if (wouldClipVertical && verticalMovement)
         {
-            List<Collider2D> proxyColliders = attachmentHandler.GetAllProxyColliders();
-
-            foreach (Collider2D proxy in proxyColliders)
+            // Completely stop vertical movement
+            if (currentVelocity.y < 0)
             {
-                if (proxy == null) continue;
+                // We're falling and hit something - completely stop and set grounded
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
+                isGrounded = true;
 
-                if (proxy is BoxCollider2D)
+                // If we're significantly penetrating, push up slightly
+                if (verticalPenetration > 0.01f && moveDir.y < 0)
                 {
-                    BoxCollider2D boxProxy = proxy as BoxCollider2D;
-                    Vector2 proxyCenter = (Vector2)proxy.transform.position + boxProxy.offset;
-
-                    RaycastHit2D hit = Physics2D.BoxCast(
-                        proxyCenter,
-                        boxProxy.size,
-                        proxy.transform.rotation.eulerAngles.z, // Include rotation for accurate collision
-                        new Vector2(direction, 0),
-                        moveDistance,
-                        obstacleLayer);
-
-                    if (hit.collider != null)
-                    {
-                        // Only block if we're not trying to move onto a platform
-                        Vector2 hitNormal = hit.normal;
-                        float angle = Vector2.Angle(hitNormal, Vector2.up);
-                        if (angle > 30f) // Not a flat surface we can roll on
-                        {
-                            // Debug visualization
-                            Debug.DrawLine(proxyCenter, hit.point, Color.red, 0.1f);
-                            return false;
-                        }
-                    }
-                }
-                else if (proxy is CircleCollider2D)
-                {
-                    CircleCollider2D circleProxy = proxy as CircleCollider2D;
-                    Vector2 proxyCenter = (Vector2)proxy.transform.position + circleProxy.offset;
-
-                    RaycastHit2D hit = Physics2D.CircleCast(
-                        proxyCenter,
-                        circleProxy.radius,
-                        new Vector2(direction, 0),
-                        moveDistance,
-                        obstacleLayer);
-
-                    if (hit.collider != null)
-                    {
-                        // Only block if we're not trying to move onto a platform
-                        Vector2 hitNormal = hit.normal;
-                        float angle = Vector2.Angle(hitNormal, Vector2.up);
-                        if (angle > 30f) // Not a flat surface we can roll on
-                        {
-                            // Debug visualization
-                            Debug.DrawLine(proxyCenter, hit.point, Color.red, 0.1f);
-                            return false;
-                        }
-                    }
+                    // Apply a minimal correction to avoid visible clipping
+                    float correctionAmount = Mathf.Min(verticalPenetration, 0.01f);
+                    Vector3 correction = new Vector3(0, correctionAmount, 0);
+                    transform.position += correction;
                 }
             }
-        }
-
-        // If no collisions detected, movement is allowed
-        return true;
-    }
-
-    // Check for items hitting obstacles from below
-    void CheckForAttachmentBottomCollisions()
-    {
-        if (!allowBottomCollisions || rb.linearVelocity.y >= 0) return; // Only check when falling
-
-        // Get all attachment proxy colliders
-        if (attachmentHandler == null) return;
-
-        List<Collider2D> proxyColliders = attachmentHandler.GetAllProxyColliders();
-        if (proxyColliders.Count == 0) return;
-
-        foreach (Collider2D proxy in proxyColliders)
-        {
-            if (proxy == null) continue;
-
-            // Create bounds for the collider
-            Bounds proxyBounds = proxy.bounds;
-
-            // Check below the collider
-            Vector2 rayOrigin = new Vector2(proxyBounds.center.x, proxyBounds.min.y);
-            float rayLength = Mathf.Abs(rb.linearVelocity.y * Time.fixedDeltaTime) + 0.05f; // A bit more than next frame's movement
-
-            // Draw debug ray
-            Debug.DrawRay(rayOrigin, Vector2.down * rayLength, Color.yellow, 0.1f);
-
-            // Cast ray down
-            RaycastHit2D hit = Physics2D.Raycast(rayOrigin, Vector2.down, rayLength, obstacleLayer);
-            if (hit.collider != null)
+            else if (currentVelocity.y > 0)
             {
-                // We hit something below, stop downward velocity
+                // We're going up and hit something - just stop upward movement
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
 
-                // Apply a small upward force to prevent getting stuck
-                rb.AddForce(Vector2.up * 1f, ForceMode2D.Impulse);
+                // If we're penetrating a ceiling, push down slightly
+                if (verticalPenetration > 0.01f)
+                {
+                    // Apply a minimal correction to avoid visible clipping
+                    float correctionAmount = Mathf.Min(verticalPenetration, 0.01f);
+                    Vector3 correction = new Vector3(0, -correctionAmount, 0);
+                    transform.position += correction;
+                }
+            }
 
-                // Debug visualization
-                Debug.DrawLine(rayOrigin, hit.point, Color.red, 0.5f);
-                return; // Only need to hit once
+            // Play a sound for feedback on vertical collision
+            if (oneSounds != null && !oneSounds.src2.isPlaying)
+            {
+                oneSounds.PlayBumpAudio();
             }
         }
     }
@@ -572,9 +830,101 @@ public class RobotController : MonoBehaviour
         RaycastHit2D hitLeft = Physics2D.Raycast(circleBottom - new Vector2(wheelCollider.radius * 0.5f, 0), Vector2.down, groundCheckDistance);
         RaycastHit2D hitRight = Physics2D.Raycast(circleBottom + new Vector2(wheelCollider.radius * 0.5f, 0), Vector2.down, groundCheckDistance);
 
-        isGrounded = (hit.collider != null && hit.collider.gameObject != gameObject && hit.collider.gameObject != bodySprite.gameObject) ||
-                     (hitLeft.collider != null && hitLeft.collider.gameObject != gameObject && hitLeft.collider.gameObject != bodySprite.gameObject) ||
-                     (hitRight.collider != null && hitRight.collider.gameObject != gameObject && hitRight.collider.gameObject != bodySprite.gameObject);
+        // First check if the robot itself is grounded
+        bool robotGrounded = (hit.collider != null && hit.collider.gameObject != gameObject && hit.collider.gameObject != bodySprite.gameObject) ||
+                         (hitLeft.collider != null && hitLeft.collider.gameObject != gameObject && hitLeft.collider.gameObject != bodySprite.gameObject) ||
+                         (hitRight.collider != null && hitRight.collider.gameObject != gameObject && hitRight.collider.gameObject != bodySprite.gameObject);
+
+        // Then check if any attachments are grounded
+        bool attachmentsGrounded = AreAttachmentsGrounded();
+
+        // We're grounded if either the robot or any attachments are grounded
+        isGrounded = robotGrounded || attachmentsGrounded;
+
+        // If we're grounded by attachments, make sure vertical velocity is zero
+        if (attachmentsGrounded && !robotGrounded && rb.linearVelocity.y < 0)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
+        }
+    }
+
+    private bool AreAttachmentsGrounded()
+    {
+        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
+        if (attachedItems.Count == 0) return false;
+
+        foreach (GameObject item in attachedItems)
+        {
+            if (item == null) continue;
+
+            Collider2D itemCollider = item.GetComponent<Collider2D>();
+            if (itemCollider == null) continue;
+
+            // Get the bottom center of the item
+            Vector2 bottom = new Vector2(
+                itemCollider.bounds.center.x,
+                itemCollider.bounds.min.y
+            );
+
+            // Cast a short ray down from the bottom of the item
+            RaycastHit2D hit = Physics2D.Raycast(
+                bottom,
+                Vector2.down,
+                0.1f,
+                groundLayer
+            );
+
+            // If we hit something that's not us or our attachments, we're grounded
+            if (hit.collider != null &&
+                hit.collider.gameObject != gameObject &&
+                !hit.collider.transform.IsChildOf(transform) &&
+                !hit.collider.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) &&
+                !hit.collider.CompareTag("ProxyCollider"))
+            {
+                return true;
+            }
+
+            // Also check edges of the item for better ground detection
+            Vector2 bottomLeft = new Vector2(
+                itemCollider.bounds.min.x,
+                itemCollider.bounds.min.y
+            );
+
+            Vector2 bottomRight = new Vector2(
+                itemCollider.bounds.max.x,
+                itemCollider.bounds.min.y
+            );
+
+            RaycastHit2D hitLeft = Physics2D.Raycast(
+                bottomLeft,
+                Vector2.down,
+                0.1f,
+                groundLayer
+            );
+
+            RaycastHit2D hitRight = Physics2D.Raycast(
+                bottomRight,
+                Vector2.down,
+                0.1f,
+                groundLayer
+            );
+
+            if ((hitLeft.collider != null &&
+                hitLeft.collider.gameObject != gameObject &&
+                !hitLeft.collider.transform.IsChildOf(transform) &&
+                !hitLeft.collider.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) &&
+                !hitLeft.collider.CompareTag("ProxyCollider")) ||
+                (hitRight.collider != null &&
+                hitRight.collider.gameObject != gameObject &&
+                !hitRight.collider.transform.IsChildOf(transform) &&
+                !hitRight.collider.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) &&
+                !hitRight.collider.CompareTag("ProxyCollider")))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void OnCollisionStay2D(Collision2D collision)
@@ -592,212 +942,67 @@ public class RobotController : MonoBehaviour
         }
     }
 
-    // Improved ceiling check with multiple raycasts that also checks for side obstacles and attached items
+    void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG))
+            return; // Ignore collisions with our own attached items
+
+        // Check if this was a significant collision
+        if (collision.relativeVelocity.magnitude > 3f)
+        {
+            // Play bump sound on significant collisions
+            if (oneSounds != null)
+            {
+                oneSounds.PlayBumpAudio();
+            }
+        }
+    }
+
+    // Checks if uncrouching would cause collisions with obstacles
     bool CanStandUp()
     {
         if (ceilingCheck == null)
         {
             Debug.LogWarning("No ceiling check transform assigned!");
-            return true; // Default to allowing stand if not set up properly
+            return true;
         }
 
-        // Get the current and uncrouch collider sizes
-        Vector2 crouchedSize = bodyCollider.size;
-        Vector2 fullSize = originalBodyColliderSize;
-
-        // Calculate difference in height and vertical position
-        float heightDifference = fullSize.y - crouchedSize.y;
-        float centerOffset = (heightDifference / 2);
-
-        // Use a wider check area to catch any potential ceiling obstacles
-        float checkWidth = bodyCollider.size.x * 0.8f;
-        int numChecks = 5; // Use multiple points to check
-
-        // 1. Check for ceiling obstacles above
-        for (int i = 0; i < numChecks; i++)
+        // Check for ceiling above
+        for (int i = -1; i <= 1; i++)
         {
-            // Calculate position across the width of the collider
-            float xOffset = -checkWidth / 2 + (i * checkWidth / (numChecks - 1));
-            Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(xOffset, 0);
-
-            // Visual debug
-            Debug.DrawRay(checkPos, Vector2.up * ceilingCheckRadius, Color.yellow, 0.1f);
-
-            // Check for ceiling
+            Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(i * 0.3f, 0);
             Collider2D hitCeiling = Physics2D.OverlapCircle(checkPos, ceilingCheckRadius, groundLayer);
             if (hitCeiling != null)
             {
-                return false; // Can't stand up, something is above
+                return false; // Can't stand up
             }
         }
 
-        // 2. Check for obstacles to the sides that would intersect with the uncrouch animation
-        // Get the current body center position
-        Vector2 bodyCenter = (Vector2)bodySprite.position + bodyCollider.offset;
-
-        // Top half of the body (this is the part that extends when uncrouching)
-        Vector2 topCenterPos = bodyCenter + new Vector2(0, centerOffset);
-
-        // Check left side
-        RaycastHit2D leftHit = Physics2D.Raycast(
-            topCenterPos,
-            Vector2.left,
-            fullSize.x / 2 + sideCheckDistance,
-            obstacleLayer);
-
-        if (leftHit.collider != null)
+        // Check if any attached items would collide
+        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
+        foreach (GameObject item in attachedItems)
         {
-            // Debug visualization
-            Debug.DrawLine(topCenterPos, leftHit.point, Color.red, 0.1f);
-            return false; // Can't stand up, something is to the left
-        }
+            if (item == null) continue;
 
-        // Check right side
-        RaycastHit2D rightHit = Physics2D.Raycast(
-            topCenterPos,
-            Vector2.right,
-            fullSize.x / 2 + sideCheckDistance,
-            obstacleLayer);
+            // Calculate how far the item would move up
+            Vector3 itemCurrentPos = item.transform.position;
+            Vector3 itemNewPos = itemCurrentPos + new Vector3(0, crouchAmount, 0);
 
-        if (rightHit.collider != null)
-        {
-            // Debug visualization
-            Debug.DrawLine(topCenterPos, rightHit.point, Color.red, 0.1f);
-            return false; // Can't stand up, something is to the right
-        }
+            // Check if this position would cause collisions
+            bool wasActive = item.activeSelf;
+            item.SetActive(false); // Temporarily disable so it doesn't collide with itself
 
-        // 3. Check if any attached items would clip through obstacles when uncrouching
-        if (attachmentHandler != null)
-        {
-            // Calculate how much the robot will move up when uncrouching
-            float uncrouchMovement = crouchAmount;
+            RaycastHit2D hit = Physics2D.Linecast(itemCurrentPos, itemNewPos, groundLayer);
 
-            // Get all attached items
-            List<GameObject> allAttachedItems = GetAllAttachedItems();
+            item.SetActive(wasActive); // Restore original state
 
-            foreach (GameObject item in allAttachedItems)
+            if (hit.collider != null)
             {
-                if (item == null) continue;
-
-                // Get the collider of the item
-                Collider2D itemCollider = item.GetComponent<Collider2D>();
-                if (itemCollider == null) continue;
-
-                // Calculate the new position of the item after uncrouching
-                Vector3 currentPos = item.transform.position;
-                Vector3 newPos = currentPos + new Vector3(0, uncrouchMovement, 0);
-
-                // Temporarily disable the collider for the check
-                bool wasEnabled = itemCollider.enabled;
-                itemCollider.enabled = false;
-
-                // Check if the item would collide with any obstacles at the new position
-                Bounds itemBounds = itemCollider.bounds;
-
-                // Adjust bounds to the new position
-                Vector3 boundsCenter = itemBounds.center + new Vector3(0, uncrouchMovement, 0);
-                Bounds newBounds = new Bounds(boundsCenter, itemBounds.size);
-
-                // Visual debugging
-                DrawDebugBounds(newBounds, Color.magenta, 0.1f);
-
-                // Check for overlaps with obstacles
-                Collider2D[] overlaps = Physics2D.OverlapBoxAll(
-                    newBounds.center,
-                    newBounds.size,
-                    0,
-                    obstacleLayer);
-
-                // Restore the collider state
-                itemCollider.enabled = wasEnabled;
-
-                // Filter out self-collisions
-                bool wouldCollide = false;
-                foreach (Collider2D overlap in overlaps)
-                {
-                    if (overlap.gameObject != gameObject &&
-                        !overlap.transform.IsChildOf(transform) &&
-                        !transform.IsChildOf(overlap.transform))
-                    {
-                        // Debug visualization
-                        Debug.DrawLine(boundsCenter, overlap.transform.position, Color.red, 0.1f);
-                        wouldCollide = true;
-                        break;
-                    }
-                }
-
-                if (wouldCollide)
-                {
-                    return false; // Can't stand up, an item would clip through an obstacle
-                }
-            }
-        }
-
-        // 4. Final check: Make sure the full body box wouldn't intersect with any obstacles
-        // This is a more comprehensive check to catch edge cases
-        Vector2 fullBodyCenter = bodyCenter + new Vector2(0, centerOffset);
-        Collider2D[] bodyOverlaps = Physics2D.OverlapBoxAll(fullBodyCenter, fullSize, 0, obstacleLayer);
-
-        foreach (Collider2D overlap in bodyOverlaps)
-        {
-            // Skip self-collisions
-            if (overlap.gameObject != gameObject &&
-                !overlap.transform.IsChildOf(transform) &&
-                !transform.IsChildOf(overlap.transform))
-            {
-                // Debug visualization
-                Debug.DrawLine(fullBodyCenter, overlap.transform.position, Color.red, 0.1f);
-                return false; // Can't stand up, would overlap with an obstacle
+                return false; // Collision detected, can't stand up
             }
         }
 
         return true; // All checks passed, can stand up
-    }
-
-    // Helper method to get all attached items
-    List<GameObject> GetAllAttachedItems()
-    {
-        List<GameObject> allItems = new List<GameObject>();
-
-        if (attachmentHandler == null) return allItems;
-
-        // Use reflection to access private fields of AttachmentHandler
-        System.Type type = attachmentHandler.GetType();
-
-        System.Reflection.FieldInfo rightPackagesField = type.GetField("rightPackages",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        System.Reflection.FieldInfo leftPackagesField = type.GetField("leftPackages",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        System.Reflection.FieldInfo topPackagesField = type.GetField("topPackages",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        if (rightPackagesField != null && leftPackagesField != null && topPackagesField != null)
-        {
-            List<GameObject> rightPackages = rightPackagesField.GetValue(attachmentHandler) as List<GameObject>;
-            List<GameObject> leftPackages = leftPackagesField.GetValue(attachmentHandler) as List<GameObject>;
-            List<GameObject> topPackages = topPackagesField.GetValue(attachmentHandler) as List<GameObject>;
-
-            if (rightPackages != null) allItems.AddRange(rightPackages);
-            if (leftPackages != null) allItems.AddRange(leftPackages);
-            if (topPackages != null) allItems.AddRange(topPackages);
-        }
-
-        return allItems;
-    }
-
-    // Helper method to draw debug bounds
-    void DrawDebugBounds(Bounds bounds, Color color, float duration = 0)
-    {
-        Vector3 min = bounds.min;
-        Vector3 max = bounds.max;
-
-        // Draw the wireframe of the bounds
-        Debug.DrawLine(new Vector3(min.x, min.y, min.z), new Vector3(max.x, min.y, min.z), color, duration);
-        Debug.DrawLine(new Vector3(min.x, min.y, min.z), new Vector3(min.x, max.y, min.z), color, duration);
-        Debug.DrawLine(new Vector3(max.x, min.y, min.z), new Vector3(max.x, max.y, min.z), color, duration);
-        Debug.DrawLine(new Vector3(min.x, max.y, min.z), new Vector3(max.x, max.y, min.z), color, duration);
     }
 
     void HandleCrouch()
@@ -891,23 +1096,139 @@ public class RobotController : MonoBehaviour
         }
     }
 
-    // Add visual debugging
+    // Called by CollisionReporter when a proxy trigger collides with something
+    public void HandleTriggerCollision(Vector2 collisionDirection, GameObject obstacle)
+    {
+        // Set blocking direction 
+        blockedDirection = collisionDirection.normalized;
+        isTriggerBlocking = true;
+
+        // Set a timer to reset the blocking (in case we get stuck)
+        triggerBlockResetTime = 0.2f;
+
+        // Maybe play a sound
+        if (oneSounds != null)
+        {
+            oneSounds.PlayBumpAudio();
+        }
+    }
+
+    // This handles continuous trigger collision
+    public void HandleTriggerCollisionStay(Vector2 collisionDirection, GameObject obstacle)
+    {
+        // Update the blocked direction
+        blockedDirection = collisionDirection.normalized;
+        isTriggerBlocking = true;
+
+        // Reset the timer while we're still colliding
+        triggerBlockResetTime = 0.2f;
+    }
+
+    // Legacy proxy collision handling methods - these can now be simplified since we're using triggers
+    public void HandleProxyCollision(Collision2D collision, GameObject proxyObject)
+    {
+        // Skip collision handling if temporarily disabled
+        if (!proxyCollisionsEnabled || isHandlingProxyCollision) return;
+
+        // Get the collision normal
+        ContactPoint2D contact = collision.GetContact(0);
+        collisionNormal = contact.normal;
+
+        // Only apply a small collision response if the relative velocity is high
+        if (collision.relativeVelocity.magnitude > 2.0f)
+        {
+            StartCoroutine(ApplyPushback());
+        }
+        else
+        {
+            // For small collisions, just stop movement in that direction
+            float dotProduct = Vector2.Dot(new Vector2(currentMoveVelocity, 0), -collisionNormal);
+            if (dotProduct > 0)
+            {
+                // Stop velocity in the direction of the collision
+                currentMoveVelocity = 0;
+            }
+        }
+
+        // Play bump sound if it's a significant collision
+        if (collision.relativeVelocity.magnitude > 3f && oneSounds != null)
+        {
+            oneSounds.PlayBumpAudio();
+        }
+    }
+
+    public void HandleProxyCollisionStay(Collision2D collision, GameObject proxyObject)
+    {
+        // This can now be minimal since we're using triggers
+        if (!proxyCollisionsEnabled) return;
+
+        // Get the collision normal
+        ContactPoint2D contact = collision.GetContact(0);
+        collisionNormal = contact.normal;
+
+        // Check if we're trying to move against the collision
+        float dotProduct = Vector2.Dot(new Vector2(currentMoveVelocity, 0), -collisionNormal);
+
+        // If we're pushing against the collision, reduce our velocity
+        if (dotProduct > 0)
+        {
+            // Reduce velocity in the direction of the collision
+            Vector2 velocityComponent = dotProduct * -collisionNormal;
+            currentMoveVelocity -= velocityComponent.x;
+        }
+    }
+
+    // For legacy support - can be simplified with triggers
+    private IEnumerator ApplyPushback()
+    {
+        isHandlingProxyCollision = true;
+
+        // Apply a small velocity in the direction of the normal
+        rb.linearVelocity = collisionNormal * collisionBounceForce;
+
+        // Pause the robot's ability to accelerate for a moment
+        float originalAcceleration = acceleration;
+        acceleration = 0;
+
+        yield return new WaitForSeconds(collisionPushbackDelay);
+
+        // Restore acceleration
+        acceleration = originalAcceleration;
+        isHandlingProxyCollision = false;
+    }
+
+    // Method to freeze position during attachment
+    public void FreezePositionForAttachment(float duration)
+    {
+        // Save current position
+        savedPosition = transform.position;
+
+        // Set flags
+        isAttachmentFreezing = true;
+        freezeTimer = duration;
+
+        // Completely zero out all velocities
+        rb.linearVelocity = Vector2.zero;
+        currentMoveVelocity = 0f;
+
+        // Disable proxy collisions
+        DisableProxyCollisionsTemporarily(duration);
+    }
+
+    // Method to disable proxy collisions temporarily
+    public void DisableProxyCollisionsTemporarily(float duration)
+    {
+        proxyCollisionsEnabled = false;
+        collisionDisableTimer = duration;
+
+        // Also reset any existing proxy collision state
+        isHandlingProxyCollision = false;
+    }
+
     void OnDrawGizmos()
     {
-        if (Application.isPlaying && ceilingCheck != null)
+        if (Application.isPlaying)
         {
-            // Visualize ceiling check area
-            float checkWidth = bodyCollider != null ? bodyCollider.size.x * 0.8f : 0.8f;
-            int numChecks = 5;
-
-            Gizmos.color = CanStandUp() ? Color.green : Color.red;
-            for (int i = 0; i < numChecks; i++)
-            {
-                float xOffset = -checkWidth / 2 + (i * checkWidth / (numChecks - 1));
-                Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(xOffset, 0);
-                Gizmos.DrawWireSphere(checkPos, ceilingCheckRadius);
-            }
-
             // Draw ground check rays
             if (wheelCollider != null)
             {
@@ -920,44 +1241,96 @@ public class RobotController : MonoBehaviour
                                 circleBottom + new Vector2(wheelCollider.radius * 0.5f, 0) + Vector2.down * groundCheckDistance);
             }
 
-            // Draw the side checks for uncrouching
-            if (bodyCollider != null && isCrouching)
+            // Draw ceiling check
+            if (ceilingCheck != null)
             {
-                Vector2 bodyCenter = (Vector2)bodySprite.position + bodyCollider.offset;
-                Vector2 crouchedSize = bodyCollider.size;
-                Vector2 fullSize = originalBodyColliderSize;
-                float heightDifference = fullSize.y - crouchedSize.y;
-                float centerOffset = (heightDifference / 2);
+                Gizmos.color = CanStandUp() ? Color.green : Color.red;
+                for (int i = -1; i <= 1; i++)
+                {
+                    Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(i * 0.3f, 0);
+                    Gizmos.DrawWireSphere(checkPos, ceilingCheckRadius);
+                }
+            }
 
-                // Top center position
-                Vector2 topCenterPos = bodyCenter + new Vector2(0, centerOffset);
+            // Draw blocked direction if active
+            if (isTriggerBlocking)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawRay(transform.position, blockedDirection * 1.5f);
+            }
 
-                // Left and right side checks
-                Gizmos.color = Color.cyan;
-                Gizmos.DrawLine(topCenterPos, topCenterPos + Vector2.left * (fullSize.x / 2 + sideCheckDistance));
-                Gizmos.DrawLine(topCenterPos, topCenterPos + Vector2.right * (fullSize.x / 2 + sideCheckDistance));
-
-                // Full body box for uncrouching
-                Vector2 fullBodyCenter = bodyCenter + new Vector2(0, centerOffset);
-                Gizmos.color = new Color(1f, 0.5f, 0f, 0.3f); // Orange with transparency
-                Gizmos.DrawCube(fullBodyCenter, fullSize);
-
-                // Visualize where attached items would be after uncrouching
-                Gizmos.color = new Color(1f, 0f, 1f, 0.5f); // Purple with transparency
-                List<GameObject> attachedItems = GetAllAttachedItems();
-                float uncrouchMovement = crouchAmount;
-
+            // Draw attached item collision bounds for debugging
+            if (attachmentHandler != null)
+            {
+                List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
                 foreach (GameObject item in attachedItems)
                 {
                     if (item == null) continue;
 
-                    Collider2D col = item.GetComponent<Collider2D>();
-                    if (col == null) continue;
+                    Collider2D itemCollider = item.GetComponent<Collider2D>();
+                    if (itemCollider == null) continue;
 
-                    Bounds itemBounds = col.bounds;
-                    Vector3 newCenter = itemBounds.center + new Vector3(0, uncrouchMovement, 0);
-                    Gizmos.DrawWireCube(newCenter, itemBounds.size);
+                    // Get the bounds of the item's collider
+                    Bounds itemBounds = itemCollider.bounds;
+
+                    // Draw the current bounds
+                    Gizmos.color = new Color(0, 1, 0, 0.3f);
+                    Gizmos.DrawCube(itemBounds.center, itemBounds.size);
+
+                    // Draw the predicted movement bounds (if we're moving)
+                    if (Mathf.Abs(currentMoveVelocity) > 0.01f)
+                    {
+                        Vector2 moveDir = new Vector2(Mathf.Sign(currentMoveVelocity), 0);
+
+                        // Expanded bounds
+                        Vector3 expansion = new Vector3(
+                            Mathf.Abs(moveDir.x) * 0.1f,
+                            0.02f,
+                            0
+                        );
+
+                        Bounds checkBounds = itemBounds;
+                        checkBounds.Expand(expansion);
+
+                        // Move in the direction of movement
+                        Vector3 offset = new Vector3(moveDir.x * Mathf.Abs(currentMoveVelocity) * Time.fixedDeltaTime, 0, 0);
+                        checkBounds.center += offset;
+
+                        // Draw the prediction bounds
+                        Gizmos.color = new Color(1, 0.5f, 0, 0.3f);
+                        Gizmos.DrawCube(checkBounds.center, checkBounds.size);
+                        Gizmos.DrawWireCube(checkBounds.center, checkBounds.size);
+                    }
+
+                    // Draw grounding raycasts
+                    Gizmos.color = Color.blue;
+
+                    Vector2 bottom = new Vector2(
+                        itemCollider.bounds.center.x,
+                        itemCollider.bounds.min.y
+                    );
+
+                    Vector2 bottomLeft = new Vector2(
+                        itemCollider.bounds.min.x,
+                        itemCollider.bounds.min.y
+                    );
+
+                    Vector2 bottomRight = new Vector2(
+                        itemCollider.bounds.max.x,
+                        itemCollider.bounds.min.y
+                    );
+
+                    Gizmos.DrawLine(bottom, bottom + Vector2.down * 0.1f);
+                    Gizmos.DrawLine(bottomLeft, bottomLeft + Vector2.down * 0.1f);
+                    Gizmos.DrawLine(bottomRight, bottomRight + Vector2.down * 0.1f);
                 }
+            }
+
+            // Draw stable position reference
+            if (lastStablePosition != Vector3.zero)
+            {
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawWireSphere(lastStablePosition, 0.1f);
             }
         }
     }
