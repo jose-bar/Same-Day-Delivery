@@ -4,6 +4,8 @@ using UnityEngine;
 
 public class RobotController : MonoBehaviour
 {
+    // All existing properties and fields remain unchanged...
+
     [Header("Movement Settings")]
     public float maxMoveSpeed = 5f;
     public float acceleration = 25f;
@@ -85,6 +87,15 @@ public class RobotController : MonoBehaviour
     private bool isTrackingStablePosition = false;
     private float stablePositionTimer = 0f;
 
+    // New attachment system components
+    private AttachmentPreview attachmentPreview;
+    private DropModeManager dropModeManager;
+
+    // Updated input handling
+    private bool lastEKeyState = false;
+    private bool lastQKeyState = false;
+    private bool useArrowsForAttachment = false;
+
     void Start()
     {
         if (attachmentHandler == null)
@@ -135,6 +146,19 @@ public class RobotController : MonoBehaviour
         {
             originalBodyMiddlePosition = bodyMiddle.localPosition;
         }
+
+        // Add and initialize new attachment system components
+        attachmentPreview = GetComponent<AttachmentPreview>();
+        if (attachmentPreview == null)
+        {
+            attachmentPreview = gameObject.AddComponent<AttachmentPreview>();
+        }
+
+        dropModeManager = GetComponent<DropModeManager>();
+        if (dropModeManager == null)
+        {
+            dropModeManager = gameObject.AddComponent<DropModeManager>();
+        }
     }
 
     void SetupBodyCollider()
@@ -179,8 +203,12 @@ public class RobotController : MonoBehaviour
 
         horizontalInput = 0f;
 
-        if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
-        if (Input.GetKey(KeyCode.D)) horizontalInput = 1f;
+        // Skip movement input if in attachment or drop mode
+        if (!attachmentPreview.IsInPreviewMode() && !dropModeManager.IsInDropMode())
+        {
+            if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
+            if (Input.GetKey(KeyCode.D)) horizontalInput = 1f;
+        }
 
         // Handle movement sound
         if (Mathf.Abs(currentMoveVelocity) > 0.5f && isGrounded)
@@ -198,10 +226,15 @@ public class RobotController : MonoBehaviour
             lastGroundedTime = Time.time;
         }
 
-        // Allow jumping if we were recently grounded
-        bool canJump = Time.time - lastGroundedTime < groundedBufferTime;
+        // Allow jumping if we were recently grounded and not in attachment/drop mode
+        bool canJump = Time.time - lastGroundedTime < groundedBufferTime &&
+                      !attachmentPreview.IsInPreviewMode() &&
+                      !dropModeManager.IsInDropMode();
+
         if (Input.GetKeyDown(KeyCode.Space) && canJump)
         {
+            // Rest of jump code remains unchanged...
+
             // Check if jumping would cause attached items to clip through ceilings
             bool canJumpWithAttachments = true;
 
@@ -271,16 +304,15 @@ public class RobotController : MonoBehaviour
             }
         }
 
-        HandleCrouch();
-        HandleSway();
+        // Only handle crouch and sway if not in attachment/drop mode
+        if (!attachmentPreview.IsInPreviewMode() && !dropModeManager.IsInDropMode())
+        {
+            HandleCrouch();
+            HandleSway();
+        }
 
-        // Attachment keys (delegate to handler)
-        if (Input.GetKeyDown(KeyCode.RightArrow))
-            attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Right);
-        else if (Input.GetKeyDown(KeyCode.LeftArrow))
-            attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Left);
-        else if (Input.GetKeyDown(KeyCode.UpArrow))
-            attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Top);
+        // Handle new attachment system
+        HandleAttachmentSystem();
 
         // Handle position freezing for attachment
         if (isAttachmentFreezing)
@@ -323,6 +355,97 @@ public class RobotController : MonoBehaviour
                 blockedDirection = Vector2.zero;
             }
         }
+    }
+
+    private void HandleAttachmentSystem()
+    {
+        bool currentEKeyState = Input.GetKey(KeyCode.E);
+        bool currentQKeyState = Input.GetKey(KeyCode.Q);
+
+        // E key pressed - toggle attachment preview mode
+        if (currentEKeyState && !lastEKeyState)
+        {
+            if (attachmentPreview.IsInPreviewMode())
+            {
+                // Confirm attachment if in preview mode
+                attachmentPreview.EndPreviewMode(true);
+                useArrowsForAttachment = false;
+            }
+            else if (!dropModeManager.IsInDropMode())
+            {
+                // Enter preview mode if not in drop mode
+                attachmentPreview.StartPreviewMode();
+                useArrowsForAttachment = true;
+            }
+        }
+
+        // Q key pressed - toggle drop mode
+        if (currentQKeyState && !lastQKeyState)
+        {
+            if (dropModeManager.IsInDropMode())
+            {
+                // Confirm drop if in drop mode
+                dropModeManager.ExitDropMode(true);
+                useArrowsForAttachment = false;
+            }
+            else if (!attachmentPreview.IsInPreviewMode() && attachmentHandler.GetAllAttachedItems().Count > 0)
+            {
+                // Enter drop mode if not in preview mode and have attachments
+                dropModeManager.EnterDropMode();
+                useArrowsForAttachment = true;
+            }
+        }
+
+        // Escape key to cancel either mode
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (attachmentPreview.IsInPreviewMode())
+            {
+                attachmentPreview.EndPreviewMode(false);
+                useArrowsForAttachment = false;
+            }
+
+            if (dropModeManager.IsInDropMode())
+            {
+                dropModeManager.ExitDropMode(false);
+                useArrowsForAttachment = false;
+            }
+        }
+
+        // Adjust position in preview mode
+        if (attachmentPreview.IsInPreviewMode())
+        {
+            attachmentPreview.AdjustPreviewPosition();
+        }
+
+        // Cycle selection in drop mode
+        if (dropModeManager.IsInDropMode())
+        {
+            if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.DownArrow))
+            {
+                dropModeManager.CycleSelection(true);
+            }
+            else if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                dropModeManager.CycleSelection(false);
+            }
+        }
+
+        // For backward compatibility, only use legacy attachment controls if not in new modes
+        if (!attachmentPreview.IsInPreviewMode() && !dropModeManager.IsInDropMode() && !useArrowsForAttachment)
+        {
+            // Legacy attachment keys (delegate to handler)
+            if (Input.GetKeyDown(KeyCode.RightArrow))
+                attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Right);
+            else if (Input.GetKeyDown(KeyCode.LeftArrow))
+                attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Left);
+            else if (Input.GetKeyDown(KeyCode.UpArrow))
+                attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Top);
+        }
+
+        // Update key states for next frame
+        lastEKeyState = currentEKeyState;
+        lastQKeyState = currentQKeyState;
     }
 
     void HandleSway()
