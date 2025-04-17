@@ -377,9 +377,9 @@ MonoBehaviour:
   crouchAmount: 0.3
   crouchSpeed: 5
   crouchColliderReduction: 0.5
-  swayAmount: 0.1
-  swaySpeed: 3
-  swayResponsiveness: 5
+  swayAmount: 10
+  swaySpeed: 100
+  swayResponsiveness: 100
   ceilingCheck: {fileID: 338481530}
   ceilingCheckRadius: 0.1
   groundLayer:
@@ -1344,6 +1344,11 @@ MonoBehaviour:
   detectionPadding: {x: 0.5, y: 1}
   detectionOffset: {x: 0, y: -0.5}
   validAttachDistance: 1
+  rightAttachPoint: {fileID: 0}
+  leftAttachPoint: {fileID: 0}
+  topAttachPoint: {fileID: 0}
+  maxAttachmentsPerSide: 3
+  minDistanceBetweenAttachments: 0.3
 --- !u!114 &995911017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1392,6 +1397,9 @@ MonoBehaviour:
   primaryHighlightColor: {r: 1, g: 0.5, b: 0, a: 0.8}
   dependentHighlightColor: {r: 1, g: 0.3, b: 0, a: 0.6}
   cycleDelay: 0.15
+  rightSideColor: {r: 1, g: 0.5, b: 0, a: 0.8}
+  leftSideColor: {r: 0, g: 0.7, b: 1, a: 0.8}
+  topSideColor: {r: 0.5, g: 1, b: 0, a: 0.8}
 --- !u!114 &995911020
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1413,6 +1421,8 @@ MonoBehaviour:
   useSnapGrid: 1
   gridSize: 0.25
   snapThreshold: 0.1
+  attachPointSnapDistance: 0.3
+  attachPointSnapWeight: 2
 --- !u!1 &1018583132
 GameObject:
   m_ObjectHideFlags: 0
