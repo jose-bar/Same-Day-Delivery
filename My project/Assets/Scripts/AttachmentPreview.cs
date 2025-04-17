@@ -22,6 +22,10 @@ public class AttachmentPreview : MonoBehaviour
     public float gridSize = 0.25f; // Size of the grid cells
     public float snapThreshold = 0.1f; // Distance at which to snap to attach points
 
+    [Header("Attachment Point Snapping")]
+    public float attachPointSnapDistance = 0.3f; // How close to be to snap to attachment points
+    public float attachPointSnapWeight = 2.0f;  // How strongly to prioritize attachment points
+
     private GameObject currentPreview;
     private bool isInPreviewMode = false;
     private Vector2 previewPosition;
@@ -36,6 +40,9 @@ public class AttachmentPreview : MonoBehaviour
 
     // List of valid snap points (attachment points)
     private List<Vector2> validSnapPoints = new List<Vector2>();
+
+    // Keep track of the attachment side during preview
+    private AttachmentHandler.AttachmentSide currentPreviewSide = AttachmentHandler.AttachmentSide.Custom;
 
     void Awake()
     {
@@ -110,13 +117,16 @@ public class AttachmentPreview : MonoBehaviour
             previewRenderer.size = targetRenderer.size;
         }
 
-        // Generate valid attachment points
+        // Generate valid attachment points for snapping
         GenerateValidSnapPoints();
 
-        // Place at closest valid snap point to the player
-        Vector2 initialPos = FindClosestSnapPoint(targetPackage.transform.position);
+        // Find the closest attachment point to place it initially
+        Vector2 initialPos = FindClosestAttachmentPoint(targetPackage.transform.position);
         previewPosition = initialPos;
         currentPreview.transform.position = previewPosition;
+
+        // Determine the attachment side
+        currentPreviewSide = DetermineAttachmentSide(previewPosition);
 
         // Check if the initial position is valid
         bool isValid = attachmentHandler.IsValidAttachmentPosition(previewPosition, targetPackage);
@@ -128,20 +138,51 @@ public class AttachmentPreview : MonoBehaviour
         isInPreviewMode = true;
     }
 
+    // Determine which attachment side we're currently on
+    private AttachmentHandler.AttachmentSide DetermineAttachmentSide(Vector2 position)
+    {
+        return attachmentHandler.DetermineSideFromPosition(position);
+    }
+
     void GenerateValidSnapPoints()
     {
         validSnapPoints.Clear();
 
-        // Add points around the robot
+        // Add specific attachment points as primary snap targets
+        if (attachmentHandler.rightAttachPoint != null)
+        {
+            validSnapPoints.Add(attachmentHandler.rightAttachPoint.position);
+        }
+
+        if (attachmentHandler.leftAttachPoint != null)
+        {
+            validSnapPoints.Add(attachmentHandler.leftAttachPoint.position);
+        }
+
+        if (attachmentHandler.topAttachPoint != null)
+        {
+            validSnapPoints.Add(attachmentHandler.topAttachPoint.position);
+        }
+
+        // Get positions of already attached packages to enable "chaining"
+        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
+        foreach (GameObject item in attachedItems)
+        {
+            if (item != null)
+            {
+                // Add package position as a potential snap point
+                validSnapPoints.Add(item.transform.position);
+
+                // Also create grid points around this item
+                AddGridPointsAroundPosition(item.transform.position, attachmentHandler.validAttachDistance);
+            }
+        }
+
+        // Add grid points to fill in the rest of the valid attachment area
         Vector2 robotCenter = transform.position;
-        float robotRadius = attachmentHandler.validAttachDistance;
+        float robotRadius = attachmentHandler.validAttachDistance * 1.5f; // Slightly larger area
 
-        // Add the standard attach positions
-        validSnapPoints.Add(attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Right));
-        validSnapPoints.Add(attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Left));
-        validSnapPoints.Add(attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Top));
-
-        // Add grid points around the robot
+        // Add grid points in a circular pattern around the robot
         for (float x = robotCenter.x - robotRadius; x <= robotCenter.x + robotRadius; x += gridSize)
         {
             for (float y = robotCenter.y - robotRadius; y <= robotCenter.y + robotRadius; y += gridSize)
@@ -149,59 +190,112 @@ public class AttachmentPreview : MonoBehaviour
                 Vector2 point = new Vector2(x, y);
                 float distToRobot = Vector2.Distance(point, robotCenter);
 
-                if (distToRobot <= robotRadius && distToRobot >= robotRadius * 0.5f)
+                if (distToRobot <= robotRadius && distToRobot >= robotRadius * 0.1f)
                 {
                     validSnapPoints.Add(point);
                 }
             }
         }
+    }
 
-        // Add points around each attached item
-        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
-        foreach (GameObject item in attachedItems)
+    // Helper to add grid points around a position
+    private void AddGridPointsAroundPosition(Vector2 center, float radius)
+    {
+        for (float x = center.x - radius; x <= center.x + radius; x += gridSize)
         {
-            if (item == null) continue;
-
-            Vector2 itemCenter = item.transform.position;
-
-            // Add grid points around this item
-            for (float x = itemCenter.x - robotRadius; x <= itemCenter.x + robotRadius; x += gridSize)
+            for (float y = center.y - radius; y <= center.y + radius; y += gridSize)
             {
-                for (float y = itemCenter.y - robotRadius; y <= itemCenter.y + robotRadius; y += gridSize)
-                {
-                    Vector2 point = new Vector2(x, y);
-                    float distToItem = Vector2.Distance(point, itemCenter);
+                Vector2 point = new Vector2(x, y);
+                float dist = Vector2.Distance(point, center);
 
-                    if (distToItem <= robotRadius && distToItem >= 0.2f) // Close but not overlapping
-                    {
-                        validSnapPoints.Add(point);
-                    }
+                if (dist <= radius && dist >= radius * 0.3f) // Not too close
+                {
+                    validSnapPoints.Add(point);
                 }
             }
         }
     }
 
-    Vector2 FindClosestSnapPoint(Vector2 position)
+    // Find the closest primary attachment point (head, left, right)
+    Vector2 FindClosestAttachmentPoint(Vector2 position)
     {
-        if (validSnapPoints.Count == 0)
-        {
-            return attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Right);
-        }
+        // Prioritize main attachment points
+        Vector2 closestPoint = Vector2.zero;
+        float closestDistance = float.MaxValue;
 
-        Vector2 closest = validSnapPoints[0];
-        float closestDist = Vector2.Distance(position, closest);
-
-        foreach (Vector2 point in validSnapPoints)
+        // Check attachment points first
+        if (attachmentHandler.rightAttachPoint != null)
         {
-            float dist = Vector2.Distance(position, point);
-            if (dist < closestDist)
+            Vector2 rightPos = attachmentHandler.rightAttachPoint.position;
+            float dist = Vector2.Distance(position, rightPos);
+
+            // Weight attachment points more heavily
+            dist /= attachPointSnapWeight;
+
+            if (dist < closestDistance)
             {
-                closest = point;
-                closestDist = dist;
+                closestDistance = dist;
+                closestPoint = rightPos;
             }
         }
 
-        return closest;
+        if (attachmentHandler.leftAttachPoint != null)
+        {
+            Vector2 leftPos = attachmentHandler.leftAttachPoint.position;
+            float dist = Vector2.Distance(position, leftPos);
+
+            // Weight attachment points more heavily
+            dist /= attachPointSnapWeight;
+
+            if (dist < closestDistance)
+            {
+                closestDistance = dist;
+                closestPoint = leftPos;
+            }
+        }
+
+        if (attachmentHandler.topAttachPoint != null)
+        {
+            Vector2 topPos = attachmentHandler.topAttachPoint.position;
+            float dist = Vector2.Distance(position, topPos);
+
+            // Weight attachment points more heavily
+            dist /= attachPointSnapWeight;
+
+            if (dist < closestDistance)
+            {
+                closestDistance = dist;
+                closestPoint = topPos;
+            }
+        }
+
+        // If we found a close attachment point, use it
+        if (closestDistance < float.MaxValue && closestDistance * attachPointSnapWeight < attachPointSnapDistance)
+        {
+            return closestPoint;
+        }
+
+        // Otherwise, try general snap points
+        if (validSnapPoints.Count > 0)
+        {
+            closestDistance = float.MaxValue;
+            Vector2 closest = validSnapPoints[0];
+
+            foreach (Vector2 point in validSnapPoints)
+            {
+                float dist = Vector2.Distance(position, point);
+                if (dist < closestDistance)
+                {
+                    closestDistance = dist;
+                    closest = point;
+                }
+            }
+
+            return closest;
+        }
+
+        // Last resort - use a default attachment position
+        return attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Right);
     }
 
     public void EndPreviewMode(bool confirm)
@@ -315,13 +409,51 @@ public class AttachmentPreview : MonoBehaviour
                 newPosition.x = Mathf.Round(newPosition.x / gridSize) * gridSize;
                 newPosition.y = Mathf.Round(newPosition.y / gridSize) * gridSize;
 
-                // Find if we're close enough to a valid snap point
-                foreach (Vector2 snapPoint in validSnapPoints)
+                // Check if we're close to an attachment point for snapping
+                bool snappedToAttachPoint = false;
+
+                // Check primary attachment points first with high priority
+                if (attachmentHandler.rightAttachPoint != null)
                 {
-                    if (Vector2.Distance(newPosition, snapPoint) < snapThreshold)
+                    Vector2 rightPos = attachmentHandler.rightAttachPoint.position;
+                    if (Vector2.Distance(newPosition, rightPos) < attachPointSnapDistance)
                     {
-                        newPosition = snapPoint;
-                        break;
+                        newPosition = rightPos;
+                        snappedToAttachPoint = true;
+                    }
+                }
+
+                if (!snappedToAttachPoint && attachmentHandler.leftAttachPoint != null)
+                {
+                    Vector2 leftPos = attachmentHandler.leftAttachPoint.position;
+                    if (Vector2.Distance(newPosition, leftPos) < attachPointSnapDistance)
+                    {
+                        newPosition = leftPos;
+                        snappedToAttachPoint = true;
+                    }
+                }
+
+                if (!snappedToAttachPoint && attachmentHandler.topAttachPoint != null)
+                {
+                    Vector2 topPos = attachmentHandler.topAttachPoint.position;
+                    if (Vector2.Distance(newPosition, topPos) < attachPointSnapDistance)
+                    {
+                        newPosition = topPos;
+                        snappedToAttachPoint = true;
+                    }
+                }
+
+                // If not snapped to a primary point, check other snap points
+                if (!snappedToAttachPoint)
+                {
+                    // Find if we're close enough to a valid snap point
+                    foreach (Vector2 snapPoint in validSnapPoints)
+                    {
+                        if (Vector2.Distance(newPosition, snapPoint) < snapThreshold)
+                        {
+                            newPosition = snapPoint;
+                            break;
+                        }
                     }
                 }
             }
@@ -331,6 +463,9 @@ public class AttachmentPreview : MonoBehaviour
 
             // Update the target package position to match
             targetPackage.transform.position = previewPosition;
+
+            // Update the current side based on position
+            currentPreviewSide = DetermineAttachmentSide(previewPosition);
 
             // Check if position is valid
             bool isValid = attachmentHandler.IsValidAttachmentPosition(previewPosition, targetPackage);
@@ -373,6 +508,21 @@ public class AttachmentPreview : MonoBehaviour
                 {
                     Gizmos.DrawSphere(point, 0.05f);
                 }
+            }
+
+            // Draw attachment points with different color
+            if (attachmentHandler != null)
+            {
+                Gizmos.color = new Color(1f, 0.5f, 0f, 0.8f);
+
+                if (attachmentHandler.rightAttachPoint != null)
+                    Gizmos.DrawSphere(attachmentHandler.rightAttachPoint.position, 0.1f);
+
+                if (attachmentHandler.leftAttachPoint != null)
+                    Gizmos.DrawSphere(attachmentHandler.leftAttachPoint.position, 0.1f);
+
+                if (attachmentHandler.topAttachPoint != null)
+                    Gizmos.DrawSphere(attachmentHandler.topAttachPoint.position, 0.1f);
             }
         }
     }
