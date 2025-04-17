@@ -8,14 +8,19 @@ using UnityEngine;
 public class AttachmentPreview : MonoBehaviour
 {
     [Header("References")]
-    public AttachmentHandler attachmentHandler; // Make this public and assignable in inspector
+    public AttachmentHandler attachmentHandler;
 
     [Header("Preview Settings")]
     public GameObject previewPrefab;
-    public float adjustmentSpeed = 0.1f;
-    public float adjustmentCooldownTime = 0.05f;
+    public float adjustmentSpeed = 0.25f; // Increased for better grid movement
+    public float adjustmentCooldownTime = 0.15f;
     public Color validColor = new Color(0, 1, 0, 0.5f);  // Semi-transparent green
     public Color invalidColor = new Color(1, 0, 0, 0.5f); // Semi-transparent red
+
+    [Header("Snap Grid Settings")]
+    public bool useSnapGrid = true;
+    public float gridSize = 0.25f; // Size of the grid cells
+    public float snapThreshold = 0.1f; // Distance at which to snap to attach points
 
     private GameObject currentPreview;
     private bool isInPreviewMode = false;
@@ -29,19 +34,18 @@ public class AttachmentPreview : MonoBehaviour
     private Vector3 originalPackagePosition;
     private Transform originalPackageParent;
 
+    // List of valid snap points (attachment points)
+    private List<Vector2> validSnapPoints = new List<Vector2>();
+
     void Awake()
     {
-        // Try to find the attachment handler if not assigned
         if (attachmentHandler == null)
         {
             attachmentHandler = GetComponent<AttachmentHandler>();
-
-            // If still null, try to find in parent/children
             if (attachmentHandler == null)
             {
                 attachmentHandler = GetComponentInParent<AttachmentHandler>();
             }
-
             if (attachmentHandler == null)
             {
                 attachmentHandler = GetComponentInChildren<AttachmentHandler>();
@@ -51,33 +55,29 @@ public class AttachmentPreview : MonoBehaviour
 
     void Start()
     {
-        // Double-check in Start() to make sure the handler is available
         if (attachmentHandler == null)
         {
-            // One more attempt to find it anywhere in the scene
             attachmentHandler = FindObjectOfType<AttachmentHandler>();
-
-            // If still null, log error but don't disable (allow runtime assignment)
             if (attachmentHandler == null)
             {
-                Debug.LogError("AttachmentPreview requires an AttachmentHandler component. Please assign one in the inspector.");
+                Debug.LogError("AttachmentPreview requires an AttachmentHandler component");
+                enabled = false;
+                return;
             }
         }
 
-        // Create preview prefab if not set
         if (previewPrefab == null)
         {
             CreateDefaultPreviewPrefab();
         }
     }
 
-    // Creates a default preview prefab if none is assigned
     private void CreateDefaultPreviewPrefab()
     {
         previewPrefab = new GameObject("DefaultPreviewPrefab");
         SpriteRenderer sr = previewPrefab.AddComponent<SpriteRenderer>();
         sr.color = new Color(0, 1, 0, 0.5f);
-        previewPrefab.SetActive(false); // Hide it until needed
+        previewPrefab.SetActive(false);
     }
 
     public bool IsInPreviewMode()
@@ -87,8 +87,7 @@ public class AttachmentPreview : MonoBehaviour
 
     public void StartPreviewMode()
     {
-        if (isInPreviewMode) return;
-        if (attachmentHandler == null) return; // Safety check
+        if (isInPreviewMode || attachmentHandler == null) return;
 
         // Find closest package
         targetPackage = attachmentHandler.FindClosestUnattachedPackage();
@@ -100,6 +99,7 @@ public class AttachmentPreview : MonoBehaviour
 
         // Create outline preview
         currentPreview = Instantiate(previewPrefab, transform);
+        currentPreview.SetActive(true);
         SpriteRenderer previewRenderer = currentPreview.GetComponent<SpriteRenderer>();
 
         // Match size and sprite with target package
@@ -110,27 +110,106 @@ public class AttachmentPreview : MonoBehaviour
             previewRenderer.size = targetRenderer.size;
         }
 
-        // Initial position at a good attachment point
-        AttachmentHandler.AttachmentSide side = AttachmentHandler.AttachmentSide.Right;
-        previewPosition = attachmentHandler.GetAttachPosition(side);
+        // Generate valid attachment points
+        GenerateValidSnapPoints();
+
+        // Place at closest valid snap point to the player
+        Vector2 initialPos = FindClosestSnapPoint(targetPackage.transform.position);
+        previewPosition = initialPos;
         currentPreview.transform.position = previewPosition;
 
         // Check if the initial position is valid
         bool isValid = attachmentHandler.IsValidAttachmentPosition(previewPosition, targetPackage);
         UpdatePreviewVisual(isValid);
 
-        // Temporarily parent the target to the preview with transparency
+        // Make the target package follow the preview
         MakePackageTransparentAndFollow();
 
         isInPreviewMode = true;
     }
 
+    void GenerateValidSnapPoints()
+    {
+        validSnapPoints.Clear();
+
+        // Add points around the robot
+        Vector2 robotCenter = transform.position;
+        float robotRadius = attachmentHandler.validAttachDistance;
+
+        // Add the standard attach positions
+        validSnapPoints.Add(attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Right));
+        validSnapPoints.Add(attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Left));
+        validSnapPoints.Add(attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Top));
+
+        // Add grid points around the robot
+        for (float x = robotCenter.x - robotRadius; x <= robotCenter.x + robotRadius; x += gridSize)
+        {
+            for (float y = robotCenter.y - robotRadius; y <= robotCenter.y + robotRadius; y += gridSize)
+            {
+                Vector2 point = new Vector2(x, y);
+                float distToRobot = Vector2.Distance(point, robotCenter);
+
+                if (distToRobot <= robotRadius && distToRobot >= robotRadius * 0.5f)
+                {
+                    validSnapPoints.Add(point);
+                }
+            }
+        }
+
+        // Add points around each attached item
+        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
+        foreach (GameObject item in attachedItems)
+        {
+            if (item == null) continue;
+
+            Vector2 itemCenter = item.transform.position;
+
+            // Add grid points around this item
+            for (float x = itemCenter.x - robotRadius; x <= itemCenter.x + robotRadius; x += gridSize)
+            {
+                for (float y = itemCenter.y - robotRadius; y <= itemCenter.y + robotRadius; y += gridSize)
+                {
+                    Vector2 point = new Vector2(x, y);
+                    float distToItem = Vector2.Distance(point, itemCenter);
+
+                    if (distToItem <= robotRadius && distToItem >= 0.2f) // Close but not overlapping
+                    {
+                        validSnapPoints.Add(point);
+                    }
+                }
+            }
+        }
+    }
+
+    Vector2 FindClosestSnapPoint(Vector2 position)
+    {
+        if (validSnapPoints.Count == 0)
+        {
+            return attachmentHandler.GetAttachPosition(AttachmentHandler.AttachmentSide.Right);
+        }
+
+        Vector2 closest = validSnapPoints[0];
+        float closestDist = Vector2.Distance(position, closest);
+
+        foreach (Vector2 point in validSnapPoints)
+        {
+            float dist = Vector2.Distance(position, point);
+            if (dist < closestDist)
+            {
+                closest = point;
+                closestDist = dist;
+            }
+        }
+
+        return closest;
+    }
+
     public void EndPreviewMode(bool confirm)
     {
         if (!isInPreviewMode) return;
-        if (attachmentHandler == null) return; // Safety check
 
-        if (confirm && attachmentHandler.IsValidAttachmentPosition(previewPosition, targetPackage))
+        if (confirm && attachmentHandler != null && targetPackage != null &&
+            attachmentHandler.IsValidAttachmentPosition(previewPosition, targetPackage))
         {
             // Apply the attachment
             attachmentHandler.AttachItemAtPosition(targetPackage, previewPosition);
@@ -150,6 +229,7 @@ public class AttachmentPreview : MonoBehaviour
 
         isInPreviewMode = false;
         targetPackage = null;
+        validSnapPoints.Clear();
     }
 
     void MakePackageTransparentAndFollow()
@@ -177,7 +257,7 @@ public class AttachmentPreview : MonoBehaviour
             col.enabled = false;
         }
 
-        // Make it follow the preview position
+        // Position at the preview point
         targetPackage.transform.position = previewPosition;
     }
 
@@ -213,7 +293,7 @@ public class AttachmentPreview : MonoBehaviour
 
     public void AdjustPreviewPosition()
     {
-        if (!isInPreviewMode || !canAdjustPosition || currentPreview == null || targetPackage == null || attachmentHandler == null)
+        if (!isInPreviewMode || !canAdjustPosition || currentPreview == null || targetPackage == null)
             return;
 
         Vector2 adjustment = Vector2.zero;
@@ -225,7 +305,28 @@ public class AttachmentPreview : MonoBehaviour
 
         if (adjustment != Vector2.zero)
         {
-            previewPosition += adjustment;
+            // Move the position based on input
+            Vector2 newPosition = previewPosition + adjustment;
+
+            // If using snap grid, find the closest valid point
+            if (useSnapGrid)
+            {
+                // First snap to grid
+                newPosition.x = Mathf.Round(newPosition.x / gridSize) * gridSize;
+                newPosition.y = Mathf.Round(newPosition.y / gridSize) * gridSize;
+
+                // Find if we're close enough to a valid snap point
+                foreach (Vector2 snapPoint in validSnapPoints)
+                {
+                    if (Vector2.Distance(newPosition, snapPoint) < snapThreshold)
+                    {
+                        newPosition = snapPoint;
+                        break;
+                    }
+                }
+            }
+
+            previewPosition = newPosition;
             currentPreview.transform.position = previewPosition;
 
             // Update the target package position to match
@@ -242,7 +343,6 @@ public class AttachmentPreview : MonoBehaviour
 
     void UpdatePreviewVisual(bool isValid)
     {
-        // Change preview color based on validity
         SpriteRenderer renderer = currentPreview.GetComponent<SpriteRenderer>();
         if (renderer != null)
         {
@@ -259,18 +359,20 @@ public class AttachmentPreview : MonoBehaviour
 
     void OnDrawGizmos()
     {
-        if (isInPreviewMode && currentPreview != null && attachmentHandler != null)
+        if (isInPreviewMode && currentPreview != null)
         {
             // Draw a line from the robot to the preview
             Gizmos.color = Color.yellow;
             Gizmos.DrawLine(transform.position, previewPosition);
 
-            // Draw connection line to attached item if connected
-            GameObject connected = attachmentHandler.FindConnectedItem(previewPosition);
-            if (connected != null && connected != gameObject)
+            // Draw snap points if in preview mode
+            if (useSnapGrid)
             {
-                Gizmos.color = Color.cyan;
-                Gizmos.DrawLine(previewPosition, connected.transform.position);
+                Gizmos.color = new Color(0f, 0.5f, 1f, 0.2f);
+                foreach (Vector2 point in validSnapPoints)
+                {
+                    Gizmos.DrawSphere(point, 0.05f);
+                }
             }
         }
     }

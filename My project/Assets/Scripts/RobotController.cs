@@ -363,36 +363,32 @@ public class RobotController : MonoBehaviour
         bool currentQKeyState = Input.GetKey(KeyCode.Q);
 
         // E key pressed - toggle attachment preview mode
-        if (currentEKeyState && !lastEKeyState)
+        if (Input.GetKeyDown(KeyCode.E) && !currentQKeyState)
         {
             if (attachmentPreview.IsInPreviewMode())
             {
                 // Confirm attachment if in preview mode
                 attachmentPreview.EndPreviewMode(true);
-                useArrowsForAttachment = false;
             }
             else if (!dropModeManager.IsInDropMode())
             {
                 // Enter preview mode if not in drop mode
                 attachmentPreview.StartPreviewMode();
-                useArrowsForAttachment = true;
             }
         }
 
         // Q key pressed - toggle drop mode
-        if (currentQKeyState && !lastQKeyState)
+        if (Input.GetKeyDown(KeyCode.Q) && !currentEKeyState)
         {
             if (dropModeManager.IsInDropMode())
             {
                 // Confirm drop if in drop mode
                 dropModeManager.ExitDropMode(true);
-                useArrowsForAttachment = false;
             }
             else if (!attachmentPreview.IsInPreviewMode() && attachmentHandler.GetAllAttachedItems().Count > 0)
             {
                 // Enter drop mode if not in preview mode and have attachments
                 dropModeManager.EnterDropMode();
-                useArrowsForAttachment = true;
             }
         }
 
@@ -402,24 +398,22 @@ public class RobotController : MonoBehaviour
             if (attachmentPreview.IsInPreviewMode())
             {
                 attachmentPreview.EndPreviewMode(false);
-                useArrowsForAttachment = false;
             }
 
             if (dropModeManager.IsInDropMode())
             {
                 dropModeManager.ExitDropMode(false);
-                useArrowsForAttachment = false;
             }
         }
 
-        // Adjust position in preview mode
+        // CRITICAL: Arrow keys should ONLY work in these special modes
+        // If in preview mode, let attachment preview handle arrow keys
         if (attachmentPreview.IsInPreviewMode())
         {
             attachmentPreview.AdjustPreviewPosition();
         }
-
-        // Cycle selection in drop mode
-        if (dropModeManager.IsInDropMode())
+        // If in drop mode, let drop mode manager handle arrow keys
+        else if (dropModeManager.IsInDropMode())
         {
             if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.DownArrow))
             {
@@ -430,24 +424,16 @@ public class RobotController : MonoBehaviour
                 dropModeManager.CycleSelection(false);
             }
         }
-
-        // For backward compatibility, only use legacy attachment controls if not in new modes
-        if (!attachmentPreview.IsInPreviewMode() && !dropModeManager.IsInDropMode() && !useArrowsForAttachment)
+        // NOT in any special mode - arrow keys should NOT do anything attachment related
+        else
         {
-            // Legacy attachment keys (delegate to handler)
-            if (Input.GetKeyDown(KeyCode.RightArrow))
-                attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Right);
-            else if (Input.GetKeyDown(KeyCode.LeftArrow))
-                attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Left);
-            else if (Input.GetKeyDown(KeyCode.UpArrow))
-                attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Top);
+            // Intentionally left empty - arrow keys do nothing for attachment when not in a special mode
         }
 
         // Update key states for next frame
         lastEKeyState = currentEKeyState;
         lastQKeyState = currentQKeyState;
     }
-
     void HandleSway()
     {
         if (bodySprite == null) return;

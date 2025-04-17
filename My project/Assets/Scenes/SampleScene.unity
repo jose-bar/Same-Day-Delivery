@@ -260,7 +260,6 @@ GameObject:
   - component: {fileID: 33954757}
   - component: {fileID: 33954756}
   - component: {fileID: 33954759}
-  - component: {fileID: 33954760}
   - component: {fileID: 33954762}
   - component: {fileID: 33954761}
   m_Layer: 0
@@ -365,11 +364,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0802fbaf46588433ca2c82e531c5dcfa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxMoveSpeed: 5
+  maxMoveSpeed: 6
   acceleration: 25
   deceleration: 10
   jumpForce: 8
-  groundCheckDistance: 0.6
+  groundCheckDistance: 0.2
   groundedBufferTime: 0.1
   bodySprite: {fileID: 995911013}
   bodyMiddle: {fileID: 230200551}
@@ -390,20 +389,6 @@ MonoBehaviour:
   attachmentHandler: {fileID: 995911016}
   collisionBounceForce: 0.5
   collisionPushbackDelay: 0.1
---- !u!114 &33954760
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 33954754}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1ad480c3d4c44a34b81435b1c7c37e32, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  weight: 2
-  canBeAttached: 1
 --- !u!114 &33954761
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1349,7 +1334,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 10374c912c71010439b2dc54cd54d59e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  attachRange: 0.2
+  attachRange: 0.15
   itemLayer:
     serializedVersion: 2
     m_Bits: 64
@@ -1358,7 +1343,7 @@ MonoBehaviour:
     m_Bits: 384
   detectionPadding: {x: 0.5, y: 1}
   detectionOffset: {x: 0, y: -0.5}
-  validAttachDistance: 0.75
+  validAttachDistance: 1
 --- !u!114 &995911017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1404,7 +1389,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   attachmentHandler: {fileID: 0}
-  highlightColor: {r: 1, g: 0.5, b: 0, a: 0.8}
+  primaryHighlightColor: {r: 1, g: 0.5, b: 0, a: 0.8}
+  dependentHighlightColor: {r: 1, g: 0.3, b: 0, a: 0.6}
   cycleDelay: 0.15
 --- !u!114 &995911020
 MonoBehaviour:
@@ -1424,6 +1410,9 @@ MonoBehaviour:
   adjustmentCooldownTime: 0.05
   validColor: {r: 0, g: 1, b: 0, a: 0.5}
   invalidColor: {r: 1, g: 0, b: 0, a: 0.5}
+  useSnapGrid: 1
+  gridSize: 0.25
+  snapThreshold: 0.1
 --- !u!1 &1018583132
 GameObject:
   m_ObjectHideFlags: 0

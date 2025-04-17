@@ -8,29 +8,27 @@ using UnityEngine;
 public class DropModeManager : MonoBehaviour
 {
     [Header("References")]
-    public AttachmentHandler attachmentHandler; // Make this public and assignable in inspector
+    public AttachmentHandler attachmentHandler;
 
     [Header("Drop Mode Settings")]
-    public Color highlightColor = new Color(1f, 0.5f, 0f, 0.8f); // Orange highlight
+    public Color primaryHighlightColor = new Color(1f, 0.5f, 0f, 0.8f); // Orange highlight
+    public Color dependentHighlightColor = new Color(1f, 0.3f, 0f, 0.6f); // Darker orange
     public float cycleDelay = 0.15f; // Cooldown between selections
 
     private bool isInDropMode = false;
     private GameObject highlightedItem = null;
     private bool canCycle = true;
+    private List<GameObject> currentHighlightedDependents = new List<GameObject>();
 
     void Awake()
     {
-        // Try to find the attachment handler if not assigned
         if (attachmentHandler == null)
         {
             attachmentHandler = GetComponent<AttachmentHandler>();
-
-            // If still null, try to find in parent/children
             if (attachmentHandler == null)
             {
                 attachmentHandler = GetComponentInParent<AttachmentHandler>();
             }
-
             if (attachmentHandler == null)
             {
                 attachmentHandler = GetComponentInChildren<AttachmentHandler>();
@@ -40,16 +38,14 @@ public class DropModeManager : MonoBehaviour
 
     void Start()
     {
-        // Double-check in Start() to make sure the handler is available
         if (attachmentHandler == null)
         {
-            // One more attempt to find it anywhere in the scene
             attachmentHandler = FindObjectOfType<AttachmentHandler>();
-
-            // If still null, log error but don't disable (allow runtime assignment)
             if (attachmentHandler == null)
             {
-                Debug.LogError("DropModeManager requires an AttachmentHandler component. Please assign one in the inspector.");
+                Debug.LogError("DropModeManager requires an AttachmentHandler component");
+                enabled = false;
+                return;
             }
         }
     }
@@ -61,38 +57,61 @@ public class DropModeManager : MonoBehaviour
 
     public void EnterDropMode()
     {
-        if (isInDropMode) return;
-        if (attachmentHandler == null) return; // Safety check
+        if (isInDropMode || attachmentHandler == null) return;
 
         List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
         if (attachedItems.Count == 0) return;
 
         isInDropMode = true;
 
-        // Highlight the first attached item
-        highlightedItem = attachedItems[0];
-        HighlightItem(highlightedItem);
+        // Find a good starting item (preferably one with dependents)
+        GameObject bestStartItem = FindBestStartingItem(attachedItems);
+        highlightedItem = bestStartItem ?? attachedItems[0];
+
+        // Highlight the selected item and its dependents
+        HighlightItemWithDependents(highlightedItem);
+    }
+
+    private GameObject FindBestStartingItem(List<GameObject> items)
+    {
+        // Start with an item that has dependents if possible
+        foreach (GameObject item in items)
+        {
+            if (item == null) continue;
+
+            HashSet<GameObject> processed = new HashSet<GameObject>();
+            List<GameObject> dependents = FindDependentItems(item, processed);
+            if (dependents.Count > 0)
+            {
+                return item;
+            }
+        }
+        return null; // No item with dependents found
     }
 
     public void ExitDropMode(bool confirmDrop)
     {
         if (!isInDropMode) return;
-        if (attachmentHandler == null) return; // Safety check
 
-        if (confirmDrop && highlightedItem != null)
+        if (confirmDrop && highlightedItem != null && attachmentHandler != null)
         {
             // Detach the highlighted item and its dependents
             attachmentHandler.DetachItem(highlightedItem);
+
+            // Play a sound effect if available
+            AudioSource audioSource = GetComponent<AudioSource>();
+            if (audioSource != null)
+            {
+                audioSource.Play();
+            }
         }
 
-        // Remove highlights
-        if (highlightedItem != null)
-        {
-            RemoveHighlight(highlightedItem);
-        }
+        // Remove all highlights
+        RemoveAllHighlights();
 
         isInDropMode = false;
         highlightedItem = null;
+        currentHighlightedDependents.Clear();
     }
 
     public void CycleSelection(bool forward = true)
@@ -100,18 +119,16 @@ public class DropModeManager : MonoBehaviour
         if (!isInDropMode || !canCycle || attachmentHandler == null) return;
 
         List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
-        if (attachedItems.Count == 0) return;
+        if (attachedItems.Count <= 1) return; // Nothing to cycle through
 
-        // Remove current highlight
-        if (highlightedItem != null)
-        {
-            RemoveHighlight(highlightedItem);
-        }
+        // Remove current highlights
+        RemoveAllHighlights();
 
         // Find current index
         int currentIndex = attachedItems.IndexOf(highlightedItem);
-        int nextIndex;
+        if (currentIndex < 0) currentIndex = 0;
 
+        int nextIndex;
         if (forward)
         {
             nextIndex = (currentIndex + 1) % attachedItems.Count;
@@ -121,87 +138,135 @@ public class DropModeManager : MonoBehaviour
             nextIndex = (currentIndex - 1 + attachedItems.Count) % attachedItems.Count;
         }
 
-        // Set new highlighted item
+        // Set and highlight new item
         highlightedItem = attachedItems[nextIndex];
-        HighlightItem(highlightedItem);
+        HighlightItemWithDependents(highlightedItem);
 
         // Apply cooldown
         StartCoroutine(CycleCooldown());
     }
 
-    void HighlightItem(GameObject item)
+    private void HighlightItemWithDependents(GameObject item)
     {
         if (item == null) return;
 
-        // Get or add ItemHighlighter component
+        // Clear previous dependent highlights list
+        currentHighlightedDependents.Clear();
+
+        // Find dependents first - use a HashSet to track processed items and avoid infinite recursion
+        HashSet<GameObject> processed = new HashSet<GameObject>();
+        List<GameObject> dependents = FindDependentItems(item, processed);
+        currentHighlightedDependents = dependents;
+
+        // Highlight main item with pulsing effect
+        HighlightMainItem(item);
+
+        // Highlight all dependents with static color
+        foreach (GameObject dependent in dependents)
+        {
+            if (dependent != null) // Safety check
+            {
+                HighlightDependentItem(dependent);
+            }
+        }
+    }
+
+    private void HighlightMainItem(GameObject item)
+    {
+        if (item == null) return;
+
+        ItemHighlighter highlighter = GetOrAddHighlighter(item);
+        highlighter.StartPulsingHighlight(primaryHighlightColor);
+    }
+
+    private void HighlightDependentItem(GameObject item)
+    {
+        if (item == null) return;
+
+        ItemHighlighter highlighter = GetOrAddHighlighter(item);
+        highlighter.StartHighlight(dependentHighlightColor);
+    }
+
+    private ItemHighlighter GetOrAddHighlighter(GameObject item)
+    {
+        if (item == null) return null;
+
         ItemHighlighter highlighter = item.GetComponent<ItemHighlighter>();
         if (highlighter == null)
         {
             highlighter = item.AddComponent<ItemHighlighter>();
         }
-
-        // Start pulsing highlight
-        highlighter.StartPulsingHighlight(highlightColor);
-
-        // Also highlight dependents with a different color
-        List<GameObject> dependents = FindAllDependents(item);
-        Color dependentColor = new Color(highlightColor.r * 0.7f, highlightColor.g * 0.7f, highlightColor.b * 0.7f, highlightColor.a * 0.7f);
-
-        foreach (GameObject dependent in dependents)
-        {
-            ItemHighlighter depHighlighter = dependent.GetComponent<ItemHighlighter>();
-            if (depHighlighter == null)
-            {
-                depHighlighter = dependent.AddComponent<ItemHighlighter>();
-            }
-
-            depHighlighter.StartHighlight(dependentColor);
-        }
+        return highlighter;
     }
 
-    void RemoveHighlight(GameObject item)
+    private void RemoveAllHighlights()
     {
-        if (item == null) return;
-
-        // Remove highlight from item
-        ItemHighlighter highlighter = item.GetComponent<ItemHighlighter>();
-        if (highlighter != null)
+        // Remove highlight from main item
+        if (highlightedItem != null)
         {
-            highlighter.StopHighlight();
-        }
-
-        // Also remove from dependents
-        List<GameObject> dependents = FindAllDependents(item);
-        foreach (GameObject dependent in dependents)
-        {
-            ItemHighlighter depHighlighter = dependent.GetComponent<ItemHighlighter>();
-            if (depHighlighter != null)
+            ItemHighlighter highlighter = highlightedItem.GetComponent<ItemHighlighter>();
+            if (highlighter != null)
             {
-                depHighlighter.StopHighlight();
+                highlighter.StopHighlight();
             }
         }
-    }
 
-    // Helper method to find all dependents (will need a reference to attachmentHandler)
-    private List<GameObject> FindAllDependents(GameObject item)
-    {
-        if (attachmentHandler == null) return new List<GameObject>();
-
-        // This is just a placeholder - in the real implementation,
-        // we'd use the attachmentHandler's dependency tracking
-        List<GameObject> dependents = new List<GameObject>();
-
-        // This mimics the process of finding dependencies
-        // Ideally would be integrated with the actual dependency system
-        foreach (Transform child in transform)
+        // Remove highlight from all dependents
+        foreach (GameObject dependent in currentHighlightedDependents)
         {
-            if (child.gameObject != item && attachmentHandler.IsAttachedToAnyList(child.gameObject))
+            if (dependent != null)
             {
-                // This would be replaced with actual dependency checking
-                float distance = Vector2.Distance(child.position, item.transform.position);
-                if (distance < 0.75f)
+                ItemHighlighter highlighter = dependent.GetComponent<ItemHighlighter>();
+                if (highlighter != null)
                 {
-                    dependents.Add(child.gameObject);
+                    highlighter.StopHighlight();
+                }
+            }
+        }
+    }
+
+    // Find all items that depend on this one, with protection against infinite recursion
+    private List<GameObject> FindDependentItems(GameObject item, HashSet<GameObject> processed)
+    {
+        if (item == null || attachmentHandler == null)
+            return new List<GameObject>();
+
+        // Add this item to the processed set to avoid revisiting it (prevents infinite recursion)
+        processed.Add(item);
+
+        List<GameObject> dependents = new List<GameObject>();
+        List<GameObject> allAttached = attachmentHandler.GetAllAttachedItems();
+
+        foreach (GameObject attached in allAttached)
+        {
+            // Skip null, self, or already processed items
+            if (attached == null || attached == item || processed.Contains(attached))
+                continue;
+
+            // This is a simplified dependency check - in reality, you'd use the 
+            // attachmentHandler's dependency tracking system
+            float distance = Vector2.Distance(attached.transform.position, item.transform.position);
+            if (distance < attachmentHandler.validAttachDistance)
+            {
+                // This could be a dependent - check if it's closer to this item than to the robot
+                float distToRobot = Vector2.Distance(attached.transform.position, transform.position);
+
+                if (distance < distToRobot)
+                {
+                    dependents.Add(attached);
+
+                    // Mark this item as processed to avoid checking it again
+                    processed.Add(attached);
+
+                    // Recursively find items dependent on this dependent
+                    List<GameObject> subDependents = FindDependentItems(attached, processed);
+                    foreach (GameObject subDependent in subDependents)
+                    {
+                        if (subDependent != null && !dependents.Contains(subDependent))
+                        {
+                            dependents.Add(subDependent);
+                        }
+                    }
                 }
             }
         }
@@ -218,25 +283,43 @@ public class DropModeManager : MonoBehaviour
 
     void OnDrawGizmos()
     {
-        if (isInDropMode && highlightedItem != null)
+        if (!isInDropMode || highlightedItem == null) return;
+
+        // Draw a highlight around the selected item
+        Gizmos.color = primaryHighlightColor;
+        Renderer renderer = highlightedItem.GetComponent<Renderer>();
+        if (renderer != null)
         {
-            // Draw a highlight around the selected item
-            Gizmos.color = highlightColor;
-            Renderer renderer = highlightedItem.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                Bounds bounds = renderer.bounds;
-                Gizmos.DrawWireCube(bounds.center, bounds.size * 1.1f);
-            }
+            Bounds bounds = renderer.bounds;
+            Gizmos.DrawWireCube(bounds.center, bounds.size * 1.1f);
+        }
 
-            // Draw lines to dependents
-            List<GameObject> dependents = FindAllDependents(highlightedItem);
-            Gizmos.color = new Color(highlightColor.r, highlightColor.g, highlightColor.b, 0.5f);
-
-            foreach (GameObject dependent in dependents)
+        // Draw connecting lines to all dependents
+        Gizmos.color = dependentHighlightColor;
+        foreach (GameObject dependent in currentHighlightedDependents)
+        {
+            if (dependent != null)
             {
-                Gizmos.DrawLine(highlightedItem.transform.position, dependent.transform.position);
+                DrawDependencyLines(highlightedItem, dependent);
             }
         }
+    }
+
+    // Draw lines showing dependency relationships
+    private void DrawDependencyLines(GameObject root, GameObject dependent)
+    {
+        if (root == null || dependent == null) return;
+
+        // Draw a line from the root to this dependent
+        Gizmos.DrawLine(root.transform.position, dependent.transform.position);
+
+        // Draw an arrow tip to show direction
+        Vector3 direction = (dependent.transform.position - root.transform.position).normalized;
+        Vector3 arrowPos = dependent.transform.position - direction * 0.2f;
+        Vector3 right = Vector3.Cross(direction, Vector3.forward).normalized * 0.1f;
+
+        Gizmos.DrawLine(arrowPos, dependent.transform.position);
+        Gizmos.DrawLine(arrowPos, arrowPos + right - direction * 0.1f);
+        Gizmos.DrawLine(arrowPos, arrowPos - right - direction * 0.1f);
     }
 }
