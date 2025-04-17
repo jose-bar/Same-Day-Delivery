@@ -32,22 +32,28 @@ public class AttachmentHandler : MonoBehaviour
 
     public enum AttachmentSide { Right, Left, Top }
 
+    // Sound Effects
+    OneSoundEffects oneSounds;
+
     void Start()
     {
         // Get a reference to the robot controller
         robotController = GetComponent<RobotController>();
+        oneSounds = GetComponentInParent<OneSoundEffects>();
     }
 
     public void ToggleAttachment(AttachmentSide side)
     {
         if (!canToggleAttach) return;
-
         List<GameObject> packageList = GetPackageList(side);
 
         // Detach logic if we already have packages attached
         if (packageList.Count >= 1)
         {
             DetachLastItem(packageList);
+
+            // Play detach audio
+            oneSounds.PlayDetachAudio();
             return;
         }
 
@@ -77,12 +83,16 @@ public class AttachmentHandler : MonoBehaviour
                     AttachItem(item, attachPos, packageList, side);
                     attachedSuccessfully = true;
 
+                    // Play attach audio on success
+                    oneSounds.PlayAttachAudio();
+
                     // Show success feedback if we have the component
                     AttachmentVisualFeedback feedback = GetComponent<AttachmentVisualFeedback>();
                     if (feedback != null)
                     {
                         feedback.ShowSuccessFeedback(item);
                     }
+                    
                     break;
                 }
                 else
