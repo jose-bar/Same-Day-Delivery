@@ -260,7 +260,6 @@ GameObject:
   - component: {fileID: 33954757}
   - component: {fileID: 33954756}
   - component: {fileID: 33954759}
-  - component: {fileID: 33954760}
   - component: {fileID: 33954762}
   - component: {fileID: 33954761}
   m_Layer: 0
@@ -365,45 +364,31 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0802fbaf46588433ca2c82e531c5dcfa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxMoveSpeed: 6.5
+  maxMoveSpeed: 6
   acceleration: 25
   deceleration: 10
   jumpForce: 8
-  groundCheckDistance: 0.1
-  groundedBufferTime: 0.05
+  groundCheckDistance: 0.2
+  groundedBufferTime: 0.1
   bodySprite: {fileID: 995911013}
   bodyMiddle: {fileID: 230200551}
   wheelSprite: {fileID: 927671650}
   bodyColliderSize: {x: 0.8, y: 1.2}
-  crouchAmount: 0.4
+  crouchAmount: 0.3
   crouchSpeed: 5
   crouchColliderReduction: 0.5
   swayAmount: 10
   swaySpeed: 100
-  swayResponsiveness: 10
+  swayResponsiveness: 100
   ceilingCheck: {fileID: 338481530}
   ceilingCheckRadius: 0.1
   groundLayer:
     serializedVersion: 2
     m_Bits: 384
-  sideCheckDistance: 0.1
+  sideCheckDistance: 0.2
   attachmentHandler: {fileID: 995911016}
-  collisionBounceForce: 2
-  collisionPushbackDelay: 0.2
---- !u!114 &33954760
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 33954754}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1ad480c3d4c44a34b81435b1c7c37e32, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  weight: 2
-  canBeAttached: 1
+  collisionBounceForce: 0.5
+  collisionPushbackDelay: 0.1
 --- !u!114 &33954761
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1397,6 +1382,8 @@ GameObject:
   - component: {fileID: 995911017}
   - component: {fileID: 995911016}
   - component: {fileID: 995911018}
+  - component: {fileID: 995911020}
+  - component: {fileID: 995911019}
   m_Layer: 0
   m_Name: HeadSprite
   m_TagString: Untagged
@@ -1532,7 +1519,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 10374c912c71010439b2dc54cd54d59e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  attachRange: 0.2
+  attachRange: 0.15
   itemLayer:
     serializedVersion: 2
     m_Bits: 64
@@ -1540,7 +1527,13 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 384
   detectionPadding: {x: 0.5, y: 1}
-  detectionOffset: {x: 0, y: 0}
+  detectionOffset: {x: 0, y: -0.5}
+  validAttachDistance: 1
+  rightAttachPoint: {fileID: 0}
+  leftAttachPoint: {fileID: 0}
+  topAttachPoint: {fileID: 0}
+  maxAttachmentsPerSide: 3
+  minDistanceBetweenAttachments: 0.3
 --- !u!114 &995911017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1573,6 +1566,48 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 384
   proxyColliderTag: ProxyCollider
+--- !u!114 &995911019
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 995911012}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 404d4d869c2a44eb19813ea3215a77a4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  attachmentHandler: {fileID: 0}
+  primaryHighlightColor: {r: 1, g: 0.5, b: 0, a: 0.8}
+  dependentHighlightColor: {r: 1, g: 0.3, b: 0, a: 0.6}
+  cycleDelay: 0.15
+  rightSideColor: {r: 1, g: 0.5, b: 0, a: 0.8}
+  leftSideColor: {r: 0, g: 0.7, b: 1, a: 0.8}
+  topSideColor: {r: 0.5, g: 1, b: 0, a: 0.8}
+--- !u!114 &995911020
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 995911012}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9dc680a80db24ba1aef8e860ea173a5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  attachmentHandler: {fileID: 0}
+  previewPrefab: {fileID: 7293839091522287483, guid: ab1b531ef271c4456a6ac1dce9b17009, type: 3}
+  adjustmentSpeed: 0.1
+  adjustmentCooldownTime: 0.05
+  validColor: {r: 0, g: 1, b: 0, a: 0.5}
+  invalidColor: {r: 1, g: 0, b: 0, a: 0.5}
+  useSnapGrid: 1
+  gridSize: 0.25
+  snapThreshold: 0.1
+  attachPointSnapDistance: 0.3
+  attachPointSnapWeight: 2
 --- !u!1 &1018583132
 GameObject:
   m_ObjectHideFlags: 0

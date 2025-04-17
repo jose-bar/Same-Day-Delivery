@@ -4,105 +4,144 @@ using UnityEngine;
 
 public class RobotController : MonoBehaviour
 {
+    #region Component References
+    private Rigidbody2D rb;
+    private CircleCollider2D wheelCollider;
+    private BoxCollider2D bodyCollider;
+    private LoopSoundEffects loopSounds;
+    private OneSoundEffects oneSounds;
+    private AttachmentPreview attachmentPreview;
+    private DropModeManager dropModeManager;
+    private WeightManager weightManager;
+    #endregion
+
+    #region Movement Settings
     [Header("Movement Settings")]
     public float maxMoveSpeed = 5f;
     public float acceleration = 25f;
     public float deceleration = 40f;
     private float currentMoveVelocity = 0f;
     public float jumpForce = 8f;
+    #endregion
 
+    #region Ground Check
     [Header("Ground Check")]
     public float groundCheckDistance = 0.6f;
     public float groundedBufferTime = 0.1f;
     private float lastGroundedTime = 0f;
+    private bool isGrounded;
+    #endregion
 
+    #region Body Settings
     [Header("Body Settings")]
     public Transform bodySprite;
     public Transform bodyMiddle;
     public Transform wheelSprite;
-    private Vector3 originalBodyMiddlePosition;
     public Vector2 bodyColliderSize = new Vector2(0.8f, 1.2f);
+    private Vector3 originalBodyPosition;
+    private Vector3 originalBodyMiddlePosition;
+    private Vector2 originalBodyColliderSize;
+    private Vector2 originalBodyColliderOffset;
+    #endregion
 
+    #region Crouch Settings
     [Header("Crouch Settings")]
     public float crouchAmount = 0.3f;
     public float crouchSpeed = 5f;
     public float crouchColliderReduction = 0.5f;
-
-    [Header("Sway Settings")]
-    public float swayAmount = 0.1f;
-    public float swaySpeed = 3f;
-    public float swayResponsiveness = 5f;
-    private float currentSwayAngle = 0f;
-    private float swayVelocity = 0f;
-
-    private Rigidbody2D rb;
-    private CircleCollider2D wheelCollider;
-    private BoxCollider2D bodyCollider;
-    private bool isGrounded;
-    private float horizontalInput;
     private bool isCrouching = false;
     private bool isAttemptingToStand = false;
 
-    [Header("Crouch Head Clearance Check")]
     public Transform ceilingCheck;
     public float ceilingCheckRadius = 0.1f;
     public LayerMask groundLayer;
     public float sideCheckDistance = 0.2f;
+    #endregion
 
-    private Vector3 originalBodyPosition;
-    private Vector2 originalBodyColliderSize;
-    private Vector2 originalBodyColliderOffset;
+    #region Sway Settings
+    [Header("Sway Settings")]
+    public float swayAmount = 0.1f;
+    public float swaySpeed = 3f;
+    public float swayResponsiveness = 5f;
+    public float passiveSwayAmount = 3f; // Strength of weight-based passive sway
+    private float currentSwayAngle = 0f;
+    private float swayVelocity = 0f;
+    private float passiveSwayAngle = 0f;
+    private float passiveSwayVelocity = 0f;
+    #endregion
 
+    #region Weight Balance Settings
+    [Header("Weight Balance Settings")]
+    public float weightSwayMultiplier = 1.5f;  // How much weight affects swaying
+    public float maxWeightImbalanceEffect = 0.7f; // Maximum effect of weight on movement (0-1)
+    #endregion
+
+    #region Attachment Settings
     [Header("Attachment")]
     public AttachmentHandler attachmentHandler;
+    #endregion
 
-    // Sound effects
-    private LoopSoundEffects loopSounds;
-    private OneSoundEffects oneSounds;
-
-    [Header("Proxy Collision")]
+    #region Collision Handling
+    [Header("Collision Handling")]
     public float collisionBounceForce = 0.5f;
     public float collisionPushbackDelay = 0.1f;
     private bool isHandlingProxyCollision = false;
     private Vector2 collisionNormal;
-
-    // Position freezing
-    private bool isAttachmentFreezing = false;
-    private float freezeTimer = 0f;
-    private Vector3 savedPosition;
-
-    // Proxy collision enabling
     private bool proxyCollisionsEnabled = true;
     private float collisionDisableTimer = 0f;
-
-    // Trigger-based collision handling
     private bool isTriggerBlocking = false;
     private Vector2 blockedDirection = Vector2.zero;
     private float triggerBlockResetTime = 0f;
+    #endregion
+
+    #region Position Handling
+    // Position freezing for attachment operations
+    private bool isAttachmentFreezing = false;
+    private float freezeTimer = 0f;
+    private Vector3 savedPosition;
 
     // Stable position tracking to prevent sinking
     private Vector3 lastStablePosition;
     private bool isTrackingStablePosition = false;
     private float stablePositionTimer = 0f;
+    #endregion
+
+    #region Input Handling
+    private float horizontalInput;
+    private bool lastEKeyState = false;
+    private bool lastQKeyState = false;
+    #endregion
 
     void Start()
     {
-        if (attachmentHandler == null)
+        // Initialize components
+        InitializeComponents();
+
+        // Set initial states
+        if (bodySprite != null)
         {
-            attachmentHandler = GetComponentInChildren<AttachmentHandler>();
-            if (attachmentHandler == null)
-                Debug.LogWarning("AttachmentHandler not assigned and not found in children.");
+            originalBodyPosition = bodySprite.localPosition;
+            SetupBodyCollider();
         }
 
+        if (bodyMiddle != null)
+        {
+            originalBodyMiddlePosition = bodyMiddle.localPosition;
+        }
+
+        // Prevent rotation
+        rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+    }
+
+    void InitializeComponents()
+    {
+        // Get or add required components
+        rb = GetComponent<Rigidbody2D>();
+        wheelCollider = GetComponent<CircleCollider2D>();
         loopSounds = GetComponent<LoopSoundEffects>();
         oneSounds = GetComponent<OneSoundEffects>();
 
-        rb = GetComponent<Rigidbody2D>();
-        wheelCollider = GetComponent<CircleCollider2D>();
-
-        if (wheelCollider == null)
-            Debug.LogError("No CircleCollider2D found on the robot!");
-
+        // Find body sprite if not set
         if (bodySprite == null)
         {
             bodySprite = transform.Find("BodySprite");
@@ -119,21 +158,33 @@ public class RobotController : MonoBehaviour
             }
         }
 
-        if (bodySprite != null)
+        // Get or add attachment handler
+        if (attachmentHandler == null)
         {
-            originalBodyPosition = bodySprite.localPosition;
-            SetupBodyCollider();
-        }
-        else
-        {
-            Debug.LogWarning("Body sprite not found!");
+            attachmentHandler = GetComponentInChildren<AttachmentHandler>();
+            if (attachmentHandler == null)
+                Debug.LogWarning("AttachmentHandler not assigned and not found in children.");
         }
 
-        rb.constraints = RigidbodyConstraints2D.FreezeRotation;
-
-        if (bodyMiddle != null)
+        // Get or add attachment preview
+        attachmentPreview = GetComponent<AttachmentPreview>();
+        if (attachmentPreview == null)
         {
-            originalBodyMiddlePosition = bodyMiddle.localPosition;
+            attachmentPreview = gameObject.AddComponent<AttachmentPreview>();
+        }
+
+        // Get or add drop mode manager
+        dropModeManager = GetComponent<DropModeManager>();
+        if (dropModeManager == null)
+        {
+            dropModeManager = gameObject.AddComponent<DropModeManager>();
+        }
+
+        // Get or add weight manager
+        weightManager = GetComponent<WeightManager>();
+        if (weightManager == null)
+        {
+            weightManager = gameObject.AddComponent<WeightManager>();
         }
     }
 
@@ -154,7 +205,54 @@ public class RobotController : MonoBehaviour
 
     void Update()
     {
-        // Track stable position when not moving horizontally
+        // Update weight distribution
+        if (weightManager != null)
+        {
+            weightManager.UpdateWeightDistribution();
+        }
+
+        // Track stable position to prevent sinking
+        TrackStablePosition();
+
+        // Get horizontal input if not in special modes
+        horizontalInput = 0f;
+        if (!attachmentPreview.IsInPreviewMode() && !dropModeManager.IsInDropMode())
+        {
+            if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
+            if (Input.GetKey(KeyCode.D)) horizontalInput = 1f;
+        }
+
+        // Handle movement sound
+        HandleMovementSound();
+
+        // Track grounded state
+        if (isGrounded)
+        {
+            lastGroundedTime = Time.time;
+        }
+
+        // Handle jumping
+        HandleJumping();
+
+        // Handle crouch and sway if not in attachment/drop mode
+        if (!attachmentPreview.IsInPreviewMode() && !dropModeManager.IsInDropMode())
+        {
+            HandleCrouch();
+            HandleSway();
+        }
+
+        // Handle attachment system
+        HandleAttachmentSystem();
+
+        // Handle position freezing for attachment
+        HandlePositionFreezing();
+
+        // Handle collision timers
+        HandleCollisionTimers();
+    }
+
+    private void TrackStablePosition()
+    {
         if (Mathf.Abs(horizontalInput) < 0.1f && isGrounded && !isCrouching)
         {
             if (!isTrackingStablePosition)
@@ -176,13 +274,10 @@ public class RobotController : MonoBehaviour
         {
             isTrackingStablePosition = false;
         }
+    }
 
-        horizontalInput = 0f;
-
-        if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
-        if (Input.GetKey(KeyCode.D)) horizontalInput = 1f;
-
-        // Handle movement sound
+    private void HandleMovementSound()
+    {
         if (Mathf.Abs(currentMoveVelocity) > 0.5f && isGrounded)
         {
             if (loopSounds != null) loopSounds.PlayMoveAudio();
@@ -191,71 +286,37 @@ public class RobotController : MonoBehaviour
         {
             if (loopSounds != null) loopSounds.StopAudio();
         }
+    }
 
-        // Remember ground state
-        if (isGrounded)
-        {
-            lastGroundedTime = Time.time;
-        }
+    private void HandleJumping()
+    {
+        // Allow jumping if we were recently grounded and not in attachment/drop mode
+        bool canJump = Time.time - lastGroundedTime < groundedBufferTime &&
+                      !attachmentPreview.IsInPreviewMode() &&
+                      !dropModeManager.IsInDropMode();
 
-        // Allow jumping if we were recently grounded
-        bool canJump = Time.time - lastGroundedTime < groundedBufferTime;
         if (Input.GetKeyDown(KeyCode.Space) && canJump)
         {
             // Check if jumping would cause attached items to clip through ceilings
-            bool canJumpWithAttachments = true;
-
-            List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
-            foreach (GameObject item in attachedItems)
-            {
-                if (item == null) continue;
-
-                Collider2D itemCollider = item.GetComponent<Collider2D>();
-                if (itemCollider == null) continue;
-
-                // Get current bounds
-                Bounds itemBounds = itemCollider.bounds;
-
-                // Create expanded bounds to check for jump clearance
-                Bounds jumpBounds = itemBounds;
-                jumpBounds.Expand(new Vector3(0.02f, 0.15f, 0)); // Expand slightly, more vertically
-
-                // Move up to simulate jump
-                jumpBounds.center += new Vector3(0, 0.2f, 0);
-
-                // Check if there's a ceiling or obstacle in the way
-                Collider2D[] hits = Physics2D.OverlapBoxAll(
-                    jumpBounds.center,
-                    jumpBounds.size,
-                    0f,
-                    groundLayer
-                );
-
-                foreach (Collider2D hit in hits)
-                {
-                    // Skip robot and attachments
-                    if (hit.gameObject == gameObject ||
-                        hit.transform.IsChildOf(transform) ||
-                        hit.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) ||
-                        hit.CompareTag("ProxyCollider"))
-                    {
-                        continue;
-                    }
-
-                    // Found an obstacle - can't jump
-                    canJumpWithAttachments = false;
-                    break;
-                }
-
-                if (!canJumpWithAttachments) break;
-            }
+            bool canJumpWithAttachments = CanJumpWithAttachments();
 
             // Only jump if we can do so safely
-            if (canJumpWithAttachments || attachedItems.Count == 0)
+            if (canJumpWithAttachments || attachmentHandler.GetAllAttachedItems().Count == 0)
             {
-                // Basic jump - physics system will handle collision constraints
+                // Apply weight penalty to jump force if heavily loaded
+                float jumpModifier = 1.0f;
+                if (weightManager != null)
+                {
+                    float totalWeight = weightManager.GetTotalWeight();
+                    float baseWeight = weightManager.baseRobotWeight;
+
+                    // Reduce jump force based on additional weight
+                    jumpModifier = Mathf.Lerp(1.0f, 0.6f, Mathf.Clamp01((totalWeight - baseWeight) / 15f));
+                }
+
+                // Execute jump
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
-                rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+                rb.AddForce(Vector2.up * jumpForce * jumpModifier, ForceMode2D.Impulse);
                 isGrounded = false;
 
                 // Play jump sound
@@ -270,67 +331,93 @@ public class RobotController : MonoBehaviour
                 }
             }
         }
+    }
 
-        HandleCrouch();
-        HandleSway();
+    private bool CanJumpWithAttachments()
+    {
+        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
 
-        // Attachment keys (delegate to handler)
-        if (Input.GetKeyDown(KeyCode.RightArrow))
-            attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Right);
-        else if (Input.GetKeyDown(KeyCode.LeftArrow))
-            attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Left);
-        else if (Input.GetKeyDown(KeyCode.UpArrow))
-            attachmentHandler.ToggleAttachment(AttachmentHandler.AttachmentSide.Top);
-
-        // Handle position freezing for attachment
-        if (isAttachmentFreezing)
+        foreach (GameObject item in attachedItems)
         {
-            freezeTimer -= Time.deltaTime;
+            if (item == null) continue;
 
-            // Force position to stay the same during freeze
-            transform.position = savedPosition;
+            Collider2D itemCollider = item.GetComponent<Collider2D>();
+            if (itemCollider == null) continue;
 
-            // Set velocity to zero
-            if (rb != null)
+            // Get current bounds
+            Bounds itemBounds = itemCollider.bounds;
+
+            // Create expanded bounds to check for jump clearance
+            Bounds jumpBounds = itemBounds;
+            jumpBounds.Expand(new Vector3(0.02f, 0.15f, 0)); // Expand slightly, more vertically
+            jumpBounds.center += new Vector3(0, 0.2f, 0);    // Move up to simulate jump
+
+            // Check if there's a ceiling or obstacle in the way
+            Collider2D[] hits = Physics2D.OverlapBoxAll(
+                jumpBounds.center,
+                jumpBounds.size,
+                0f,
+                groundLayer
+            );
+
+            foreach (Collider2D hit in hits)
             {
-                rb.linearVelocity = Vector2.zero;
-            }
+                // Skip robot and attachments
+                if (hit.gameObject == gameObject ||
+                    hit.transform.IsChildOf(transform) ||
+                    hit.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG) ||
+                    hit.CompareTag("ProxyCollider"))
+                {
+                    continue;
+                }
 
-            // Cancel freezing if timer expired
-            if (freezeTimer <= 0)
-            {
-                isAttachmentFreezing = false;
+                // Found an obstacle - can't jump
+                return false;
             }
         }
 
-        // Handle collision disable timer
-        if (!proxyCollisionsEnabled)
-        {
-            collisionDisableTimer -= Time.deltaTime;
-            if (collisionDisableTimer <= 0)
-            {
-                proxyCollisionsEnabled = true;
-            }
-        }
-
-        // Handle trigger blocking timer
-        if (isTriggerBlocking)
-        {
-            triggerBlockResetTime -= Time.deltaTime;
-            if (triggerBlockResetTime <= 0)
-            {
-                isTriggerBlocking = false;
-                blockedDirection = Vector2.zero;
-            }
-        }
+        return true;
     }
 
     void HandleSway()
     {
         if (bodySprite == null) return;
 
+        // Get weight-based passive sway
+        float weightSway = 0f;
+        if (weightManager != null)
+        {
+            weightSway = weightManager.GetWeightSwayAngle() * weightSwayMultiplier;
+        }
+
         // Target sway based on horizontal input and robot velocity
-        float targetSway = -horizontalInput * swayAmount;
+        float inputSway = -horizontalInput * swayAmount;
+
+        // Blend input sway with passive weight sway
+        float targetSway = inputSway;
+
+        // Only apply passive weight sway when not getting horizontal input
+        if (Mathf.Abs(horizontalInput) < 0.1f)
+        {
+            // Smoothly blend toward weight-based sway
+            passiveSwayAngle = Mathf.SmoothDamp(
+                passiveSwayAngle,
+                weightSway,
+                ref passiveSwayVelocity,
+                0.5f, // Slower to respond than input sway
+                passiveSwayAmount
+            );
+
+            targetSway = passiveSwayAngle;
+        }
+        else
+        {
+            // Input is active, but still add a bit of weight influence
+            targetSway = inputSway + (weightSway * 0.3f);
+
+            // Reset passive sway
+            passiveSwayAngle = 0f;
+        }
 
         // Apply smooth damping for natural swaying motion
         float smoothTime = isGrounded ? 0.1f : 0.3f; // Less responsive in air
@@ -343,45 +430,30 @@ public class RobotController : MonoBehaviour
         // Use the safe angle
         currentSwayAngle = safeAngle;
 
-        // Apply sway to the body
-        if (!isCrouching)
-        {
-            // Don't reset z rotation - only modify it
-            Vector3 currentRot = bodySprite.localRotation.eulerAngles;
-            bodySprite.localRotation = Quaternion.Euler(currentRot.x, currentRot.y, currentSwayAngle);
+        // Apply sway to the robot body
+        ApplySwayRotation(isCrouching ? currentSwayAngle * 0.5f : currentSwayAngle);
+    }
 
-            // Apply the same sway to attachments by rotating the entire transform except wheel
-            if (wheelSprite != null)
-            {
-                // Keep the wheel rotation separate
-                Quaternion wheelRot = wheelSprite.localRotation;
-                transform.localRotation = Quaternion.Euler(0, 0, currentSwayAngle);
-                wheelSprite.localRotation = wheelRot; // Preserve wheel rotation
-            }
-            else
-            {
-                transform.localRotation = Quaternion.Euler(0, 0, currentSwayAngle);
-            }
+    private void ApplySwayRotation(float angle)
+    {
+        // Apply sway to the body sprite
+        if (bodySprite != null)
+        {
+            Vector3 currentRot = bodySprite.localRotation.eulerAngles;
+            bodySprite.localRotation = Quaternion.Euler(currentRot.x, currentRot.y, angle);
+        }
+
+        // Apply the same sway to attachments by rotating the entire transform except wheel
+        if (wheelSprite != null)
+        {
+            // Keep the wheel rotation separate
+            Quaternion wheelRot = wheelSprite.localRotation;
+            transform.localRotation = Quaternion.Euler(0, 0, angle);
+            wheelSprite.localRotation = wheelRot; // Preserve wheel rotation
         }
         else
         {
-            // Less sway when crouching
-            float crouchSwayFactor = 0.5f;
-            float crouchedSwayAngle = currentSwayAngle * crouchSwayFactor;
-
-            Vector3 currentRot = bodySprite.localRotation.eulerAngles;
-            bodySprite.localRotation = Quaternion.Euler(currentRot.x, currentRot.y, crouchedSwayAngle);
-
-            if (wheelSprite != null)
-            {
-                Quaternion wheelRot = wheelSprite.localRotation;
-                transform.localRotation = Quaternion.Euler(0, 0, crouchedSwayAngle);
-                wheelSprite.localRotation = wheelRot;
-            }
-            else
-            {
-                transform.localRotation = Quaternion.Euler(0, 0, crouchedSwayAngle);
-            }
+            transform.localRotation = Quaternion.Euler(0, 0, angle);
         }
     }
 
@@ -518,7 +590,7 @@ public class RobotController : MonoBehaviour
 
         // Restore the original rotation and position
         transform.rotation = originalRotation;
-        transform.position = originalPosition; // IMPORTANT: Restore position too
+        transform.position = originalPosition;
 
         // Return the best safe angle we found
         maxSafeAngle = bestAngle;
@@ -526,13 +598,133 @@ public class RobotController : MonoBehaviour
         return wouldClip;
     }
 
+    private void HandleAttachmentSystem()
+    {
+        bool currentEKeyState = Input.GetKey(KeyCode.E);
+        bool currentQKeyState = Input.GetKey(KeyCode.Q);
+
+        // E key pressed - toggle attachment preview mode
+        if (Input.GetKeyDown(KeyCode.E) && !currentQKeyState)
+        {
+            if (attachmentPreview.IsInPreviewMode())
+            {
+                // Confirm attachment if in preview mode
+                attachmentPreview.EndPreviewMode(true);
+            }
+            else if (!dropModeManager.IsInDropMode())
+            {
+                // Enter preview mode if not in drop mode
+                attachmentPreview.StartPreviewMode();
+            }
+        }
+
+        // Q key pressed - toggle drop mode
+        if (Input.GetKeyDown(KeyCode.Q) && !currentEKeyState)
+        {
+            if (dropModeManager.IsInDropMode())
+            {
+                // Confirm drop if in drop mode
+                dropModeManager.ExitDropMode(true);
+            }
+            else if (!attachmentPreview.IsInPreviewMode() && attachmentHandler.GetAllAttachedItems().Count > 0)
+            {
+                // Enter drop mode if not in preview mode and have attachments
+                dropModeManager.EnterDropMode();
+            }
+        }
+
+        // Escape key to cancel either mode
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (attachmentPreview.IsInPreviewMode())
+            {
+                attachmentPreview.EndPreviewMode(false);
+            }
+
+            if (dropModeManager.IsInDropMode())
+            {
+                dropModeManager.ExitDropMode(false);
+            }
+        }
+
+        // If in preview mode, let attachment preview handle arrow keys
+        if (attachmentPreview.IsInPreviewMode())
+        {
+            attachmentPreview.AdjustPreviewPosition();
+        }
+        // If in drop mode, let drop mode manager handle arrow keys
+        else if (dropModeManager.IsInDropMode())
+        {
+            if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.DownArrow))
+            {
+                dropModeManager.CycleSelection(true);
+            }
+            else if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                dropModeManager.CycleSelection(false);
+            }
+        }
+
+        // Update key states for next frame
+        lastEKeyState = currentEKeyState;
+        lastQKeyState = currentQKeyState;
+    }
+
+    private void HandlePositionFreezing()
+    {
+        if (isAttachmentFreezing)
+        {
+            freezeTimer -= Time.deltaTime;
+
+            // Force position to stay the same during freeze
+            transform.position = savedPosition;
+
+            // Set velocity to zero
+            if (rb != null) rb.linearVelocity = Vector2.zero;
+
+            // Cancel freezing if timer expired
+            if (freezeTimer <= 0) isAttachmentFreezing = false;
+        }
+    }
+
+    private void HandleCollisionTimers()
+    {
+        // Handle collision disable timer
+        if (!proxyCollisionsEnabled)
+        {
+            collisionDisableTimer -= Time.deltaTime;
+            if (collisionDisableTimer <= 0) proxyCollisionsEnabled = true;
+        }
+
+        // Handle trigger blocking timer
+        if (isTriggerBlocking)
+        {
+            triggerBlockResetTime -= Time.deltaTime;
+            if (triggerBlockResetTime <= 0)
+            {
+                isTriggerBlocking = false;
+                blockedDirection = Vector2.zero;
+            }
+        }
+    }
+
     void FixedUpdate()
     {
         // Skip normal movement updates if freezing
         if (isAttachmentFreezing) return;
 
-        // Calculate target velocity based on input
+        // Calculate base target velocity
         float targetVelocity = horizontalInput * maxMoveSpeed;
+
+        // Apply weight imbalance effects to movement
+        if (weightManager != null && Mathf.Abs(horizontalInput) > 0.01f)
+        {
+            // Get speed multiplier based on weight and direction
+            float speedMultiplier = weightManager.GetSpeedMultiplier(horizontalInput);
+
+            // Apply to target velocity
+            targetVelocity *= speedMultiplier;
+        }
 
         // Check if we're trying to move into a blocked direction
         if (isTriggerBlocking)
@@ -546,31 +738,60 @@ public class RobotController : MonoBehaviour
             }
         }
 
-        // Apply acceleration or deceleration
+        // Apply acceleration or deceleration (with weight adjustments)
         if (horizontalInput != 0 && targetVelocity != 0)
         {
-            // Accelerate toward target velocity
+            // Get acceleration multiplier based on weight
+            float accelMultiplier = 1.0f;
+            if (weightManager != null)
+            {
+                accelMultiplier = weightManager.GetAccelerationMultiplier(horizontalInput);
+            }
+
+            // Accelerate toward target velocity with weight adjustment
             currentMoveVelocity = Mathf.MoveTowards(
                 currentMoveVelocity,
                 targetVelocity,
-                acceleration * Time.fixedDeltaTime);
+                acceleration * accelMultiplier * Time.fixedDeltaTime);
         }
         else
         {
             // Decelerate toward zero when no input or blocked
+            // Use different deceleration based on weight imbalance
+            float decelMultiplier = 1.0f;
+            if (weightManager != null)
+            {
+                // When slowing down, heavier side causes faster deceleration (momentum)
+                float imbalance = weightManager.GetWeightImbalance();
+                float directionSign = Mathf.Sign(currentMoveVelocity);
+
+                // If moving toward the heavy side, decelerate slower (momentum)
+                // If moving away from heavy side, decelerate faster (less momentum)
+                if (Mathf.Sign(imbalance) == directionSign)
+                {
+                    // Moving toward heavy side - harder to stop
+                    decelMultiplier = 1.0f - (Mathf.Abs(imbalance) * 0.3f);
+                }
+                else
+                {
+                    // Moving away from heavy side - easier to stop
+                    decelMultiplier = 1.0f + (Mathf.Abs(imbalance) * 0.3f);
+                }
+            }
+
             currentMoveVelocity = Mathf.MoveTowards(
                 currentMoveVelocity,
                 0f,
-                deceleration * Time.fixedDeltaTime);
+                deceleration * decelMultiplier * Time.fixedDeltaTime);
         }
 
-        // IMPORTANT: First store the current vertical velocity since PreventClipping might modify it
+        // Store the current vertical velocity since PreventClipping might modify it
         float currentVerticalVelocity = rb.linearVelocity.y;
 
-        // Set initial horizontal velocity (vertical will be managed by PreventClipping)
+        // Set horizontal velocity (vertical will be managed by PreventClipping)
         rb.linearVelocity = new Vector2(currentMoveVelocity, currentVerticalVelocity);
 
-        // Run the clipping prevention check AFTER setting initial velocity
+        // Run the clipping prevention check
         PreventClipping();
 
         // Check if we're grounded
@@ -623,7 +844,7 @@ public class RobotController : MonoBehaviour
             // Get the bounds of the item's collider
             Bounds itemBounds = itemCollider.bounds;
 
-            // IMPORTANT: Use much larger horizontal expansion to prevent any wall clipping
+            // Use much larger horizontal expansion to prevent any wall clipping
             Vector3 expansion = new Vector3(
                 (horizontalMovement ? Mathf.Abs(moveDir.x) * 0.2f : 0) + 0.05f, // Increased horizontal expansion
                 (verticalMovement ? Mathf.Abs(moveDir.y) * 0.1f : 0) + 0.03f,   // Slight increase to vertical
@@ -748,7 +969,7 @@ public class RobotController : MonoBehaviour
             // If there's penetration, push back slightly to prevent visible clipping
             if (horizontalPenetration > 0.01f)
             {
-                // IMPORTANT: Store current Y position
+                // Store current Y position
                 float currentY = transform.position.y;
 
                 // Move slightly away from the wall (in the opposite direction of movement)
@@ -756,7 +977,7 @@ public class RobotController : MonoBehaviour
                 Vector3 correction = new Vector3(-moveDir.x * correctionAmount, 0, 0);
                 transform.position += correction;
 
-                // CRITICAL FIX: Restore original Y position to prevent sinking
+                // Restore original Y position to prevent sinking
                 transform.position = new Vector3(transform.position.x, currentY, transform.position.z);
 
                 // If we have a last stable position and we're significantly lower than it,
@@ -958,53 +1179,6 @@ public class RobotController : MonoBehaviour
         }
     }
 
-    // Checks if uncrouching would cause collisions with obstacles
-    bool CanStandUp()
-    {
-        if (ceilingCheck == null)
-        {
-            Debug.LogWarning("No ceiling check transform assigned!");
-            return true;
-        }
-
-        // Check for ceiling above
-        for (int i = -1; i <= 1; i++)
-        {
-            Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(i * 0.3f, 0);
-            Collider2D hitCeiling = Physics2D.OverlapCircle(checkPos, ceilingCheckRadius, groundLayer);
-            if (hitCeiling != null)
-            {
-                return false; // Can't stand up
-            }
-        }
-
-        // Check if any attached items would collide
-        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
-        foreach (GameObject item in attachedItems)
-        {
-            if (item == null) continue;
-
-            // Calculate how far the item would move up
-            Vector3 itemCurrentPos = item.transform.position;
-            Vector3 itemNewPos = itemCurrentPos + new Vector3(0, crouchAmount, 0);
-
-            // Check if this position would cause collisions
-            bool wasActive = item.activeSelf;
-            item.SetActive(false); // Temporarily disable so it doesn't collide with itself
-
-            RaycastHit2D hit = Physics2D.Linecast(itemCurrentPos, itemNewPos, groundLayer);
-
-            item.SetActive(wasActive); // Restore original state
-
-            if (hit.collider != null)
-            {
-                return false; // Collision detected, can't stand up
-            }
-        }
-
-        return true; // All checks passed, can stand up
-    }
-
     void HandleCrouch()
     {
         if (bodySprite != null)
@@ -1096,6 +1270,53 @@ public class RobotController : MonoBehaviour
         }
     }
 
+    // Checks if uncrouching would cause collisions with obstacles
+    bool CanStandUp()
+    {
+        if (ceilingCheck == null)
+        {
+            Debug.LogWarning("No ceiling check transform assigned!");
+            return true;
+        }
+
+        // Check for ceiling above
+        for (int i = -1; i <= 1; i++)
+        {
+            Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(i * 0.3f, 0);
+            Collider2D hitCeiling = Physics2D.OverlapCircle(checkPos, ceilingCheckRadius, groundLayer);
+            if (hitCeiling != null)
+            {
+                return false; // Can't stand up
+            }
+        }
+
+        // Check if any attached items would collide
+        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
+        foreach (GameObject item in attachedItems)
+        {
+            if (item == null) continue;
+
+            // Calculate how far the item would move up
+            Vector3 itemCurrentPos = item.transform.position;
+            Vector3 itemNewPos = itemCurrentPos + new Vector3(0, crouchAmount, 0);
+
+            // Check if this position would cause collisions
+            bool wasActive = item.activeSelf;
+            item.SetActive(false); // Temporarily disable so it doesn't collide with itself
+
+            RaycastHit2D hit = Physics2D.Linecast(itemCurrentPos, itemNewPos, groundLayer);
+
+            item.SetActive(wasActive); // Restore original state
+
+            if (hit.collider != null)
+            {
+                return false; // Collision detected, can't stand up
+            }
+        }
+
+        return true; // All checks passed, can stand up
+    }
+
     // Called by CollisionReporter when a proxy trigger collides with something
     public void HandleTriggerCollision(Vector2 collisionDirection, GameObject obstacle)
     {
@@ -1124,7 +1345,7 @@ public class RobotController : MonoBehaviour
         triggerBlockResetTime = 0.2f;
     }
 
-    // Legacy proxy collision handling methods - these can now be simplified since we're using triggers
+    // For handling proxy collisions (legacy support)
     public void HandleProxyCollision(Collision2D collision, GameObject proxyObject)
     {
         // Skip collision handling if temporarily disabled
@@ -1157,28 +1378,6 @@ public class RobotController : MonoBehaviour
         }
     }
 
-    public void HandleProxyCollisionStay(Collision2D collision, GameObject proxyObject)
-    {
-        // This can now be minimal since we're using triggers
-        if (!proxyCollisionsEnabled) return;
-
-        // Get the collision normal
-        ContactPoint2D contact = collision.GetContact(0);
-        collisionNormal = contact.normal;
-
-        // Check if we're trying to move against the collision
-        float dotProduct = Vector2.Dot(new Vector2(currentMoveVelocity, 0), -collisionNormal);
-
-        // If we're pushing against the collision, reduce our velocity
-        if (dotProduct > 0)
-        {
-            // Reduce velocity in the direction of the collision
-            Vector2 velocityComponent = dotProduct * -collisionNormal;
-            currentMoveVelocity -= velocityComponent.x;
-        }
-    }
-
-    // For legacy support - can be simplified with triggers
     private IEnumerator ApplyPushback()
     {
         isHandlingProxyCollision = true;
@@ -1225,113 +1424,18 @@ public class RobotController : MonoBehaviour
         isHandlingProxyCollision = false;
     }
 
-    void OnDrawGizmos()
+    // Helper method to get debug info for UI
+    public string GetWeightDebugInfo()
     {
-        if (Application.isPlaying)
-        {
-            // Draw ground check rays
-            if (wheelCollider != null)
-            {
-                Vector2 circleBottom = (Vector2)transform.position - new Vector2(0, wheelCollider.radius);
-                Gizmos.color = Color.green;
-                Gizmos.DrawLine(circleBottom, circleBottom + Vector2.down * groundCheckDistance);
-                Gizmos.DrawLine(circleBottom - new Vector2(wheelCollider.radius * 0.5f, 0),
-                                circleBottom - new Vector2(wheelCollider.radius * 0.5f, 0) + Vector2.down * groundCheckDistance);
-                Gizmos.DrawLine(circleBottom + new Vector2(wheelCollider.radius * 0.5f, 0),
-                                circleBottom + new Vector2(wheelCollider.radius * 0.5f, 0) + Vector2.down * groundCheckDistance);
-            }
+        if (weightManager == null) return "Weight system not active";
 
-            // Draw ceiling check
-            if (ceilingCheck != null)
-            {
-                Gizmos.color = CanStandUp() ? Color.green : Color.red;
-                for (int i = -1; i <= 1; i++)
-                {
-                    Vector2 checkPos = (Vector2)ceilingCheck.position + new Vector2(i * 0.3f, 0);
-                    Gizmos.DrawWireSphere(checkPos, ceilingCheckRadius);
-                }
-            }
-
-            // Draw blocked direction if active
-            if (isTriggerBlocking)
-            {
-                Gizmos.color = Color.red;
-                Gizmos.DrawRay(transform.position, blockedDirection * 1.5f);
-            }
-
-            // Draw attached item collision bounds for debugging
-            if (attachmentHandler != null)
-            {
-                List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
-                foreach (GameObject item in attachedItems)
-                {
-                    if (item == null) continue;
-
-                    Collider2D itemCollider = item.GetComponent<Collider2D>();
-                    if (itemCollider == null) continue;
-
-                    // Get the bounds of the item's collider
-                    Bounds itemBounds = itemCollider.bounds;
-
-                    // Draw the current bounds
-                    Gizmos.color = new Color(0, 1, 0, 0.3f);
-                    Gizmos.DrawCube(itemBounds.center, itemBounds.size);
-
-                    // Draw the predicted movement bounds (if we're moving)
-                    if (Mathf.Abs(currentMoveVelocity) > 0.01f)
-                    {
-                        Vector2 moveDir = new Vector2(Mathf.Sign(currentMoveVelocity), 0);
-
-                        // Expanded bounds
-                        Vector3 expansion = new Vector3(
-                            Mathf.Abs(moveDir.x) * 0.1f,
-                            0.02f,
-                            0
-                        );
-
-                        Bounds checkBounds = itemBounds;
-                        checkBounds.Expand(expansion);
-
-                        // Move in the direction of movement
-                        Vector3 offset = new Vector3(moveDir.x * Mathf.Abs(currentMoveVelocity) * Time.fixedDeltaTime, 0, 0);
-                        checkBounds.center += offset;
-
-                        // Draw the prediction bounds
-                        Gizmos.color = new Color(1, 0.5f, 0, 0.3f);
-                        Gizmos.DrawCube(checkBounds.center, checkBounds.size);
-                        Gizmos.DrawWireCube(checkBounds.center, checkBounds.size);
-                    }
-
-                    // Draw grounding raycasts
-                    Gizmos.color = Color.blue;
-
-                    Vector2 bottom = new Vector2(
-                        itemCollider.bounds.center.x,
-                        itemCollider.bounds.min.y
-                    );
-
-                    Vector2 bottomLeft = new Vector2(
-                        itemCollider.bounds.min.x,
-                        itemCollider.bounds.min.y
-                    );
-
-                    Vector2 bottomRight = new Vector2(
-                        itemCollider.bounds.max.x,
-                        itemCollider.bounds.min.y
-                    );
-
-                    Gizmos.DrawLine(bottom, bottom + Vector2.down * 0.1f);
-                    Gizmos.DrawLine(bottomLeft, bottomLeft + Vector2.down * 0.1f);
-                    Gizmos.DrawLine(bottomRight, bottomRight + Vector2.down * 0.1f);
-                }
-            }
-
-            // Draw stable position reference
-            if (lastStablePosition != Vector3.zero)
-            {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawWireSphere(lastStablePosition, 0.1f);
-            }
-        }
+        return string.Format(
+            "Left: {0:F1}  Right: {1:F1}  Top: {2:F1}\nImbalance: {3:F2}  Total: {4:F1}",
+            weightManager.GetLeftSideWeight(),
+            weightManager.GetRightSideWeight(),
+            weightManager.GetTopSideWeight(),
+            weightManager.GetWeightImbalance(),
+            weightManager.GetTotalWeight()
+        );
     }
 }
