@@ -28,6 +28,7 @@ public class RobotController : MonoBehaviour
     [Header("Death Settings")]
     public Sprite brokenHeadSprite; // Assign in inspector
     public GameObject gameOverUI;   // UI Panel with "GAME OVER"
+    public float deathDelay = 2f;
     #endregion
 
     #region Ground Check
@@ -137,6 +138,9 @@ public class RobotController : MonoBehaviour
 
         // Prevent rotation
         rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+
+        //
+        gameOverUI.SetActive(false);
     }
 
     void InitializeComponents()
@@ -209,42 +213,45 @@ public class RobotController : MonoBehaviour
         originalBodyColliderOffset = bodyCollider.offset;
     }
 
-    public void Die() 
+     public void Die()
     {
-        // 1. Detach and enable physics on all children
+        // 1. Detach & enable physics on children
         foreach (Transform child in transform)
         {
-            Rigidbody2D rb = child.GetComponent<Rigidbody2D>();
+            var rb = child.GetComponent<Rigidbody2D>();
             if (rb != null)
             {
-                rb.bodyType = RigidbodyType2D.Dynamic;
-                rb.gravityScale = 1;
-                rb.constraints = RigidbodyConstraints2D.None;
+                rb.bodyType      = RigidbodyType2D.Dynamic;
+                rb.gravityScale  = 1;
+                rb.constraints   = RigidbodyConstraints2D.None;
             }
-
-            child.SetParent(null); // detach from robot
+            child.SetParent(null);
         }
 
-        // 2. Change head sprite
-        Transform head = transform.Find("Head");
+        // 2. Swap head sprite immediately
+        var head = transform.Find("HeadSprite");
         if (head != null)
         {
-            SpriteRenderer sr = head.GetComponent<SpriteRenderer>();
+            var sr = head.GetComponent<SpriteRenderer>();
             if (sr != null && brokenHeadSprite != null)
-            {
                 sr.sprite = brokenHeadSprite;
-            }
         }
 
-        // 3. Disable robot control
+        // 3. Stop player control
         this.enabled = false;
 
-        // 4. Show Game Over UI
-        if (gameOverUI != null)
-        {
-            gameOverUI.SetActive(true);
-        }
+        // 4. Schedule the UI+pause after a delay
+        Invoke(nameof(ShowGameOver), deathDelay);
     }
+
+    private void ShowGameOver()
+    {
+        if (gameOverUI != null)
+            gameOverUI.SetActive(true);
+
+        Time.timeScale = 0f;
+    }
+
 
     void Update()
     {

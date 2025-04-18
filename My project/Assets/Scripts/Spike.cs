@@ -12,8 +12,14 @@ public class Spike : MonoBehaviour
             // Destroy that GameObject
             Destroy(other.gameObject);
         }else if(other.CompareTag("Player")){
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);   
+            RobotController player = other.GetComponent<RobotController>();
+            if (player != null)
+            {
+                player.Die();
+            }
         }
-
+        
     }
+
+
 }

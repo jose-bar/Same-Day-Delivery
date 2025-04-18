@@ -41,6 +41,7 @@ public class PauseMenuLogic : MonoBehaviour
 
     public void RetryLevel(){
         Time.timeScale = 1f;
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     public void ExitToMenu(){
