@@ -634,8 +634,8 @@ public class RobotController : MonoBehaviour
             }
         }
 
-        // Escape key to cancel either mode
-        if (Input.GetKeyDown(KeyCode.Escape))
+        // X key to cancel either mode
+        if (Input.GetKeyDown(KeyCode.X))
         {
             if (attachmentPreview.IsInPreviewMode())
             {
@@ -653,17 +653,10 @@ public class RobotController : MonoBehaviour
         {
             attachmentPreview.AdjustPreviewPosition();
         }
-        // If in drop mode, let drop mode manager handle arrow keys
+        // If in drop mode, let drop mode manager handle input directly
         else if (dropModeManager.IsInDropMode())
         {
-            if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.DownArrow))
-            {
-                dropModeManager.CycleSelection(true);
-            }
-            else if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.UpArrow))
-            {
-                dropModeManager.CycleSelection(false);
-            }
+            dropModeManager.HandleDropModeInput();
         }
 
         // Update key states for next frame

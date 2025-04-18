@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Manages the drop mode for selecting which item to detach
+/// Manages the drop mode for selecting which item to detach using directional controls
 /// </summary>
 public class DropModeManager : MonoBehaviour
 {
@@ -11,8 +11,6 @@ public class DropModeManager : MonoBehaviour
     public AttachmentHandler attachmentHandler;
 
     [Header("Drop Mode Settings")]
-    public Color primaryHighlightColor = new Color(1f, 0.5f, 0f, 0.8f); // Orange highlight
-    public Color dependentHighlightColor = new Color(1f, 0.3f, 0f, 0.6f); // Darker orange
     public float cycleDelay = 0.15f; // Cooldown between selections
 
     [Header("Side-Specific Settings")]
@@ -20,13 +18,17 @@ public class DropModeManager : MonoBehaviour
     public Color leftSideColor = new Color(0f, 0.7f, 1f, 0.8f);  // Blue for left
     public Color topSideColor = new Color(0.5f, 1f, 0f, 0.8f);   // Green for top
 
+    [Header("Debug")]
+    public bool showDebugLogs = false;
+
     private bool isInDropMode = false;
     private GameObject highlightedItem = null;
     private bool canCycle = true;
     private List<GameObject> currentHighlightedDependents = new List<GameObject>();
+    private Dictionary<AttachmentHandler.AttachmentSide, int> currentSideIndices = new Dictionary<AttachmentHandler.AttachmentSide, int>();
 
-    // Track the current side we're viewing
-    private AttachmentHandler.AttachmentSide currentSide = AttachmentHandler.AttachmentSide.Right;
+    // Track the current active side
+    private AttachmentHandler.AttachmentSide currentActiveSide = AttachmentHandler.AttachmentSide.Right;
 
     void Awake()
     {
@@ -42,6 +44,11 @@ public class DropModeManager : MonoBehaviour
                 attachmentHandler = GetComponentInChildren<AttachmentHandler>();
             }
         }
+
+        // Initialize the side indices
+        currentSideIndices[AttachmentHandler.AttachmentSide.Right] = 0;
+        currentSideIndices[AttachmentHandler.AttachmentSide.Left] = 0;
+        currentSideIndices[AttachmentHandler.AttachmentSide.Top] = 0;
     }
 
     void Start()
@@ -67,78 +74,52 @@ public class DropModeManager : MonoBehaviour
     {
         if (isInDropMode || attachmentHandler == null) return;
 
-        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
-        if (attachedItems.Count == 0) return;
+        // Get counts for each side
+        List<GameObject> rightItems = attachmentHandler.GetPackageList(AttachmentHandler.AttachmentSide.Right);
+        List<GameObject> leftItems = attachmentHandler.GetPackageList(AttachmentHandler.AttachmentSide.Left);
+        List<GameObject> topItems = attachmentHandler.GetPackageList(AttachmentHandler.AttachmentSide.Top);
 
+        // Check if we have any attached items at all
+        int totalItems = rightItems.Count + leftItems.Count + topItems.Count;
+        if (totalItems == 0) return;
+
+        if (showDebugLogs)
+        {
+            Debug.Log($"Drop Mode: Right items: {rightItems.Count}, Left items: {leftItems.Count}, Top items: {topItems.Count}");
+        }
+
+        // Reset all indices
+        currentSideIndices[AttachmentHandler.AttachmentSide.Right] = 0;
+        currentSideIndices[AttachmentHandler.AttachmentSide.Left] = 0;
+        currentSideIndices[AttachmentHandler.AttachmentSide.Top] = 0;
+
+        // Now we're entering drop mode
         isInDropMode = true;
 
-        // Start with right side by default
-        currentSide = AttachmentHandler.AttachmentSide.Right;
-
-        // Find items on the current side
-        List<GameObject> sideItems = attachmentHandler.GetPackageList(currentSide);
-
-        // If no items on this side, try another side
-        if (sideItems.Count == 0)
+        // Find first side with items to start with
+        if (rightItems.Count > 0)
         {
-            currentSide = AttachmentHandler.AttachmentSide.Left;
-            sideItems = attachmentHandler.GetPackageList(currentSide);
-
-            if (sideItems.Count == 0)
-            {
-                currentSide = AttachmentHandler.AttachmentSide.Top;
-                sideItems = attachmentHandler.GetPackageList(currentSide);
-            }
+            currentActiveSide = AttachmentHandler.AttachmentSide.Right;
+            highlightedItem = rightItems[0];
+        }
+        else if (leftItems.Count > 0)
+        {
+            currentActiveSide = AttachmentHandler.AttachmentSide.Left;
+            highlightedItem = leftItems[0];
+        }
+        else if (topItems.Count > 0)
+        {
+            currentActiveSide = AttachmentHandler.AttachmentSide.Top;
+            highlightedItem = topItems[0];
         }
 
-        // If we found items on any side, select the first one
-        if (sideItems.Count > 0)
+        if (showDebugLogs)
         {
-            highlightedItem = FindBestStartingItem(sideItems);
-            if (highlightedItem == null)
-            {
-                highlightedItem = sideItems[0]; // Fallback to first item
-            }
-
-            // Highlight the selected item and its dependents
-            HighlightItemWithDependents(highlightedItem);
-        }
-        else
-        {
-            // No items found on any side (this shouldn't happen given earlier check)
-            isInDropMode = false;
-        }
-    }
-
-    private GameObject FindBestStartingItem(List<GameObject> items)
-    {
-        // First try to find an item directly connected to the robot
-        foreach (GameObject item in items)
-        {
-            if (item == null) continue;
-
-            GameObject connectedTo;
-            if (attachmentHandler.attachmentConnections.TryGetValue(item, out connectedTo) &&
-                connectedTo == gameObject)
-            {
-                return item;
-            }
+            Debug.Log($"Drop Mode: Starting with side {currentActiveSide} and item {highlightedItem.name}");
         }
 
-        // If none found, try an item with dependents
-        foreach (GameObject item in items)
-        {
-            if (item == null) continue;
-
-            HashSet<GameObject> processed = new HashSet<GameObject>();
-            List<GameObject> dependents = FindDependentItems(item, processed);
-            if (dependents.Count > 0)
-            {
-                return item;
-            }
-        }
-
-        return null; // No best item found
+        // Highlight the selected item and its dependents
+        HighlightItemWithDependents(highlightedItem);
     }
 
     public void ExitDropMode(bool confirmDrop)
@@ -168,126 +149,138 @@ public class DropModeManager : MonoBehaviour
 
     public void CycleSelection(bool forward = true)
     {
+        // This method is now only used for down arrow (cycle back)
+        // or when it's called directly from code without specifying a side
+
         if (!isInDropMode || !canCycle || attachmentHandler == null) return;
 
-        // Get items on the current side
-        List<GameObject> sideItems = attachmentHandler.GetPackageList(currentSide);
+        // Use the active side and cycle within it
+        CycleWithinSide(currentActiveSide, forward);
+    }
 
-        if (sideItems.Count <= 0)
+    // Handle direction-specific input in the RobotController
+    public void HandleDropModeInput()
+    {
+        if (!isInDropMode || !canCycle) return;
+
+        // Left Arrow = cycle left attachments
+        if (Input.GetKeyDown(KeyCode.LeftArrow))
         {
-            // If no items on current side, try to switch sides
-            if (forward)
+            SelectSide(AttachmentHandler.AttachmentSide.Left);
+        }
+        // Right Arrow = cycle right attachments
+        else if (Input.GetKeyDown(KeyCode.RightArrow))
+        {
+            SelectSide(AttachmentHandler.AttachmentSide.Right);
+        }
+        // Up Arrow = cycle top attachments
+        else if (Input.GetKeyDown(KeyCode.UpArrow))
+        {
+            SelectSide(AttachmentHandler.AttachmentSide.Top);
+        }
+        // Down Arrow = cycle selected side backward
+        else if (Input.GetKeyDown(KeyCode.DownArrow))
+        {
+            CycleWithinSide(currentActiveSide, false);
+        }
+    }
+
+    // Select and highlight a specific side
+    private void SelectSide(AttachmentHandler.AttachmentSide side)
+    {
+        List<GameObject> sideItems = attachmentHandler.GetPackageList(side);
+
+        if (sideItems.Count == 0)
+        {
+            // No items on this side, play feedback
+            AudioSource audioSource = GetComponent<AudioSource>();
+            if (audioSource != null)
             {
-                // Try next side (right -> left -> top -> right)
-                if (currentSide == AttachmentHandler.AttachmentSide.Right)
-                    currentSide = AttachmentHandler.AttachmentSide.Left;
-                else if (currentSide == AttachmentHandler.AttachmentSide.Left)
-                    currentSide = AttachmentHandler.AttachmentSide.Top;
-                else
-                    currentSide = AttachmentHandler.AttachmentSide.Right;
-            }
-            else
-            {
-                // Try previous side (right -> top -> left -> right)
-                if (currentSide == AttachmentHandler.AttachmentSide.Right)
-                    currentSide = AttachmentHandler.AttachmentSide.Top;
-                else if (currentSide == AttachmentHandler.AttachmentSide.Top)
-                    currentSide = AttachmentHandler.AttachmentSide.Left;
-                else
-                    currentSide = AttachmentHandler.AttachmentSide.Right;
+                audioSource.Play();
             }
 
-            // Get items on the new side
-            sideItems = attachmentHandler.GetPackageList(currentSide);
-
-            // If we found items, select the first one
-            if (sideItems.Count > 0)
+            if (showDebugLogs)
             {
-                // Remove current highlights
-                RemoveAllHighlights();
-
-                highlightedItem = sideItems[0];
-                HighlightItemWithDependents(highlightedItem);
-
-                // Apply cooldown
-                StartCoroutine(CycleCooldown());
-                return;
+                Debug.Log($"No items on {side} side");
             }
-            else
-            {
-                // If still no items, just return
-                return;
-            }
+
+            return;
         }
 
-        // If we have multiple items on this side, cycle through them
-        if (sideItems.Count > 1)
+        // If we're already on this side, cycle to the next item
+        if (side == currentActiveSide)
         {
-            // Remove current highlights
-            RemoveAllHighlights();
-
-            // Find current index
-            int currentIndex = sideItems.IndexOf(highlightedItem);
-            if (currentIndex < 0) currentIndex = 0;
-
-            int nextIndex;
-            if (forward)
-            {
-                nextIndex = (currentIndex + 1) % sideItems.Count;
-            }
-            else
-            {
-                nextIndex = (currentIndex - 1 + sideItems.Count) % sideItems.Count;
-            }
-
-            // Set and highlight new item
-            highlightedItem = sideItems[nextIndex];
-            HighlightItemWithDependents(highlightedItem);
+            CycleWithinSide(side, true);
+            return;
         }
-        else if (sideItems.Count == 1 && highlightedItem != sideItems[0])
+
+        // Switch to this side
+        currentActiveSide = side;
+
+        // Get the current index for this side
+        int index = currentSideIndices[side];
+
+        // Make sure the index is valid
+        if (index >= sideItems.Count)
         {
-            // If we have exactly one item and it's not selected, select it
-            RemoveAllHighlights();
-            highlightedItem = sideItems[0];
-            HighlightItemWithDependents(highlightedItem);
+            index = 0;
+            currentSideIndices[side] = 0;
+        }
+
+        // Clear old highlights
+        RemoveAllHighlights();
+
+        // Highlight the item
+        highlightedItem = sideItems[index];
+        HighlightItemWithDependents(highlightedItem);
+
+        if (showDebugLogs)
+        {
+            Debug.Log($"Selected {side} side, item {index}: {highlightedItem.name}");
+        }
+
+        // Apply cooldown
+        StartCoroutine(CycleCooldown());
+    }
+
+    // Cycle within a specific side
+    private void CycleWithinSide(AttachmentHandler.AttachmentSide side, bool forward)
+    {
+        List<GameObject> sideItems = attachmentHandler.GetPackageList(side);
+
+        if (sideItems.Count <= 1)
+        {
+            // Nothing to cycle through
+            return;
+        }
+
+        // Get the current index
+        int currentIndex = currentSideIndices[side];
+
+        // Calculate next index
+        int nextIndex;
+        if (forward)
+        {
+            nextIndex = (currentIndex + 1) % sideItems.Count;
         }
         else
         {
-            // If we can't cycle within this side, try to switch sides
-            AttachmentHandler.AttachmentSide newSide;
-            if (forward)
-            {
-                // Try next side (right -> left -> top -> right)
-                newSide = currentSide == AttachmentHandler.AttachmentSide.Right ?
-                    AttachmentHandler.AttachmentSide.Left :
-                    (currentSide == AttachmentHandler.AttachmentSide.Left ?
-                        AttachmentHandler.AttachmentSide.Top : AttachmentHandler.AttachmentSide.Right);
-            }
-            else
-            {
-                // Try previous side (right -> top -> left -> right)
-                newSide = currentSide == AttachmentHandler.AttachmentSide.Right ?
-                    AttachmentHandler.AttachmentSide.Top :
-                    (currentSide == AttachmentHandler.AttachmentSide.Top ?
-                        AttachmentHandler.AttachmentSide.Left : AttachmentHandler.AttachmentSide.Right);
-            }
+            nextIndex = (currentIndex - 1 + sideItems.Count) % sideItems.Count;
+        }
 
-            // Get items on the new side
-            List<GameObject> newSideItems = attachmentHandler.GetPackageList(newSide);
+        // Update the index
+        currentSideIndices[side] = nextIndex;
 
-            // If we found items on the new side, switch to it
-            if (newSideItems.Count > 0)
-            {
-                // Remove current highlights
-                RemoveAllHighlights();
+        // Clear old highlights
+        RemoveAllHighlights();
 
-                // Update current side
-                currentSide = newSide;
+        // Highlight the new item
+        highlightedItem = sideItems[nextIndex];
+        HighlightItemWithDependents(highlightedItem);
 
-                // Select first item on the new side
-                highlightedItem = newSideItems[0];
-                HighlightItemWithDependents(highlightedItem);
-            }
+        if (showDebugLogs)
+        {
+            Debug.Log($"Cycled within {side} side from {currentIndex} to {nextIndex}: {highlightedItem.name}");
         }
 
         // Apply cooldown
@@ -307,7 +300,7 @@ public class DropModeManager : MonoBehaviour
         currentHighlightedDependents = dependents;
 
         // Get highlight color based on the side
-        Color highlightColor = GetSideColor(currentSide);
+        Color highlightColor = GetSideColor(currentActiveSide);
 
         // Highlight main item with pulsing effect
         HighlightMainItem(item, highlightColor);
@@ -334,7 +327,7 @@ public class DropModeManager : MonoBehaviour
             case AttachmentHandler.AttachmentSide.Top:
                 return topSideColor;
             default:
-                return primaryHighlightColor;
+                return Color.white;
         }
     }
 
@@ -482,7 +475,7 @@ public class DropModeManager : MonoBehaviour
         if (!isInDropMode || highlightedItem == null) return;
 
         // Get side color
-        Color sideColor = GetSideColor(currentSide);
+        Color sideColor = GetSideColor(currentActiveSide);
 
         // Draw a highlight around the selected item
         Gizmos.color = sideColor;
@@ -503,34 +496,32 @@ public class DropModeManager : MonoBehaviour
             }
         }
 
-        // Draw a text label showing the current side
+        // Draw a visual indication of each attachment point
         if (attachmentHandler != null)
         {
-            // Draw label at the appropriate attachment point
-            Vector3 labelPos = Vector3.zero;
-
-            switch (currentSide)
+            // Right attachment point
+            if (attachmentHandler.rightAttachPoint != null)
             {
-                case AttachmentHandler.AttachmentSide.Right:
-                    labelPos = attachmentHandler.rightAttachPoint != null ?
-                        attachmentHandler.rightAttachPoint.position :
-                        (Vector2)transform.position + Vector2.right * 0.7f;
-                    break;
-                case AttachmentHandler.AttachmentSide.Left:
-                    labelPos = attachmentHandler.leftAttachPoint != null ?
-                        attachmentHandler.leftAttachPoint.position :
-                        (Vector2)transform.position + Vector2.left * 0.7f;
-                    break;
-                case AttachmentHandler.AttachmentSide.Top:
-                    labelPos = attachmentHandler.topAttachPoint != null ?
-                        attachmentHandler.topAttachPoint.position :
-                        (Vector2)transform.position + Vector2.up * 0.7f;
-                    break;
+                Gizmos.color = currentActiveSide == AttachmentHandler.AttachmentSide.Right ?
+                    rightSideColor : rightSideColor * 0.5f;
+                Gizmos.DrawSphere(attachmentHandler.rightAttachPoint.position, 0.15f);
             }
 
-            // Draw a circle at the point
-            Gizmos.color = sideColor;
-            Gizmos.DrawSphere(labelPos, 0.15f);
+            // Left attachment point
+            if (attachmentHandler.leftAttachPoint != null)
+            {
+                Gizmos.color = currentActiveSide == AttachmentHandler.AttachmentSide.Left ?
+                    leftSideColor : leftSideColor * 0.5f;
+                Gizmos.DrawSphere(attachmentHandler.leftAttachPoint.position, 0.15f);
+            }
+
+            // Top attachment point
+            if (attachmentHandler.topAttachPoint != null)
+            {
+                Gizmos.color = currentActiveSide == AttachmentHandler.AttachmentSide.Top ?
+                    topSideColor : topSideColor * 0.5f;
+                Gizmos.DrawSphere(attachmentHandler.topAttachPoint.position, 0.15f);
+            }
         }
     }
 
