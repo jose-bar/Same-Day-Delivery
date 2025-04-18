@@ -25,6 +25,13 @@ public class RobotController : MonoBehaviour
     public float jumpForce = 8f;
     #endregion
 
+    #region Death Settings
+    [Header("Death Settings")]
+    public Sprite brokenHeadSprite; // Assign in inspector
+    public GameObject gameOverUI;   // UI Panel with "GAME OVER"
+    public float deathDelay = 2f;
+    #endregion
+
     #region Ground Check
     [Header("Ground Check")]
     public float groundCheckDistance = 0.6f;
@@ -132,6 +139,9 @@ public class RobotController : MonoBehaviour
 
         // Prevent rotation
         rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+
+        //
+        gameOverUI.SetActive(false);
     }
 
     void InitializeComponents()
@@ -203,6 +213,48 @@ public class RobotController : MonoBehaviour
         originalBodyColliderSize = bodyCollider.size;
         originalBodyColliderOffset = bodyCollider.offset;
     }
+
+     public void Die()
+    {
+        // 1. Detach & enable physics on children
+        foreach (Transform child in transform)
+        {
+            var rb = child.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.bodyType      = RigidbodyType2D.Dynamic;
+                rb.gravityScale  = 1;
+                rb.constraints   = RigidbodyConstraints2D.None;
+            }
+            child.SetParent(null);
+        }
+
+        // 2. Swap head sprite immediately
+        var head = transform.Find("HeadSprite");
+        if (head != null)
+        {
+            var sr = head.GetComponent<SpriteRenderer>();
+            if (sr != null && brokenHeadSprite != null)
+                sr.sprite = brokenHeadSprite;
+        }
+
+        // 3. Stop player control
+        this.enabled = false;
+
+        // 4. Schedule the UI+pause after a delay
+        Invoke(nameof(ShowGameOver), deathDelay);
+    }
+
+    private void ShowGameOver()
+    {
+        if (gameOverUI != null)
+            gameOverUI.SetActive(true);
+
+        Time.timeScale = 0f;
+        loopSounds.PauseAudio();
+        oneSounds.PauseAllAudio();
+    }
+
 
     void Update()
     {
