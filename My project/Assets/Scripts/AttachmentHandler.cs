@@ -52,10 +52,14 @@ public class AttachmentHandler : MonoBehaviour
 
     public enum AttachmentSide { Right, Left, Top, Custom }
 
+    // Sound Effects
+    OneSoundEffects oneSounds;
+
     void Start()
     {
         // Get a reference to the robot controller
         robotController = GetComponent<RobotController>();
+        oneSounds = GetComponentInParent<OneSoundEffects>();
 
         // Create attachment points if they don't exist
         CreateAttachmentPointsIfNeeded();
@@ -128,7 +132,6 @@ public class AttachmentHandler : MonoBehaviour
     public void ToggleAttachment(AttachmentSide side)
     {
         if (!canToggleAttach) return;
-
         List<GameObject> packageList = GetPackageList(side);
 
         // Detach logic if we already have packages attached
@@ -176,6 +179,7 @@ public class AttachmentHandler : MonoBehaviour
                     {
                         feedback.ShowSuccessFeedback(item);
                     }
+
                     break;
                 }
                 else
@@ -294,6 +298,9 @@ public class AttachmentHandler : MonoBehaviour
 
         // Perform the attachment
         AttachItem(item, attachPosition, packageList, side);
+        
+        // Play attach audio on success
+        oneSounds.PlayAttachAudio();
 
         // Track the connection and side
         if (connectedTo != null)
@@ -734,6 +741,9 @@ public class AttachmentHandler : MonoBehaviour
         {
             col.enabled = true;
         }
+
+        // Play detach audio
+        oneSounds.PlayDetachAudio();
     }
 
     private void DrawDebugBounds(Bounds bounds, Color color)

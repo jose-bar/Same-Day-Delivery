@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class RobotController : MonoBehaviour
@@ -1164,7 +1165,7 @@ public class RobotController : MonoBehaviour
     }
 
     void OnCollisionEnter2D(Collision2D collision)
-    {
+    {        
         if (collision.gameObject.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG))
             return; // Ignore collisions with our own attached items
 
