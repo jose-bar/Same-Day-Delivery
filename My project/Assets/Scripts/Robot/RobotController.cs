@@ -251,6 +251,8 @@ public class RobotController : MonoBehaviour
             gameOverUI.SetActive(true);
 
         Time.timeScale = 0f;
+        loopSounds.PauseAudio();
+        oneSounds.PauseAllAudio();
     }
 
 
