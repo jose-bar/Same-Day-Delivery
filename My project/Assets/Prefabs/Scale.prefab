@@ -27,7 +27,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0.027, y: 1.213, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 0.1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3192387105863277909}
@@ -98,7 +98,7 @@ GameObject:
   - component: {fileID: 4422190757400560689}
   - component: {fileID: 4370079166862303778}
   m_Layer: 0
-  m_Name: GameObject
+  m_Name: ScaleBody
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -113,8 +113,8 @@ Transform:
   m_GameObject: {fileID: 8103520960974863220}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.011000156, y: 0.809, z: -0.16029045}
-  m_LocalScale: {x: 1, y: 1, z: 0.1}
+  m_LocalPosition: {x: 0.011000156, y: 0.809, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3192387105863277909}
@@ -202,12 +202,12 @@ Transform:
   m_GameObject: {fileID: 9067865548401717103}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -5, y: -0.91, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 10}
-  m_ConstrainProportionsScale: 0
+  m_LocalPosition: {x: -5, y: -0.91, z: 5}
+  m_LocalScale: {x: 1.5, y: 1.5, z: 1.5}
+  m_ConstrainProportionsScale: 1
   m_Children:
-  - {fileID: 4422190757400560689}
   - {fileID: 1933261090484805335}
+  - {fileID: 4422190757400560689}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!212 &7435307530948855955
@@ -323,3 +323,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0648b5f1d7db3743969dfb30560791b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  screenChildName: Screen
+  passThreshold: 10
+  passSprite: {fileID: 3784859478328580564, guid: 6a1f56517fcc8e14fb260e08bbe6a2ad, type: 3}
+  failSprite: {fileID: -5092300336156557494, guid: dd40ac4cdce9acc4fac776d9cbdeb678, type: 3}
