@@ -24,6 +24,12 @@ public class RobotController : MonoBehaviour
     public float jumpForce = 8f;
     #endregion
 
+    #region Death Settings
+    [Header("Death Settings")]
+    public Sprite brokenHeadSprite; // Assign in inspector
+    public GameObject gameOverUI;   // UI Panel with "GAME OVER"
+    #endregion
+
     #region Ground Check
     [Header("Ground Check")]
     public float groundCheckDistance = 0.6f;
@@ -201,6 +207,43 @@ public class RobotController : MonoBehaviour
 
         originalBodyColliderSize = bodyCollider.size;
         originalBodyColliderOffset = bodyCollider.offset;
+    }
+
+    public void Die() 
+    {
+        // 1. Detach and enable physics on all children
+        foreach (Transform child in transform)
+        {
+            Rigidbody2D rb = child.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.bodyType = RigidbodyType2D.Dynamic;
+                rb.gravityScale = 1;
+                rb.constraints = RigidbodyConstraints2D.None;
+            }
+
+            child.SetParent(null); // detach from robot
+        }
+
+        // 2. Change head sprite
+        Transform head = transform.Find("Head");
+        if (head != null)
+        {
+            SpriteRenderer sr = head.GetComponent<SpriteRenderer>();
+            if (sr != null && brokenHeadSprite != null)
+            {
+                sr.sprite = brokenHeadSprite;
+            }
+        }
+
+        // 3. Disable robot control
+        this.enabled = false;
+
+        // 4. Show Game Over UI
+        if (gameOverUI != null)
+        {
+            gameOverUI.SetActive(true);
+        }
     }
 
     void Update()

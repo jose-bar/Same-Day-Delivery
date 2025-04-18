@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 1106631169739521010}
   m_Layer: 6
   m_Name: Package1
-  m_TagString: Untagged
+  m_TagString: Package
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -104,6 +104,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   weight: 1
   canBeAttached: 1
+  showWeightText: 1
+  lightWeightColor: {r: 0.5, g: 1, b: 0.5, a: 1}
+  mediumWeightColor: {r: 1, g: 1, b: 0.5, a: 1}
+  heavyWeightColor: {r: 1, g: 0.5, b: 0.5, a: 1}
 --- !u!61 &3255182575248166618
 BoxCollider2D:
   m_ObjectHideFlags: 0

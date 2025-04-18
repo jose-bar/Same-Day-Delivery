@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 1a2ac0a0e788b74449e22486a6046def
+guid: 4f976c3d5688dd04aa6c25c7bea397dc
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 2406929845222086149
-    second: placeholder menu background_0
+      213: -1733552099582721279
+    second: PackageSprites - Spike_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -37,7 +37,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 1
+    filterMode: 0
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -75,7 +75,7 @@ TextureImporter:
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
-    textureCompression: 1
+    textureCompression: 0
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: placeholder menu background_0
+      name: PackageSprites - Spike_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 1536
-        height: 864
+        width: 45
+        height: 24
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 5069fb711f1276120800000000000000
-      internalID: 2406929845222086149
+      spriteID: 1034db8dc8f21f7e0800000000000000
+      internalID: -1733552099582721279
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      placeholder menu background_0: 2406929845222086149
+      PackageSprites - Spike_0: -1733552099582721279
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
