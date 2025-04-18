@@ -139,9 +139,6 @@ public class AttachmentHandler : MonoBehaviour
         {
             // Only detach the last item on this side, not all
             DetachLastItem(packageList);
-
-            // Play detach audio
-            oneSounds.PlayDetachAudio();
             return;
         }
 
@@ -172,8 +169,6 @@ public class AttachmentHandler : MonoBehaviour
                     AttachItem(item, attachPos, packageList, side);
                     attachedSuccessfully = true;
 
-                    // Play attach audio on success
-                    oneSounds.PlayAttachAudio();
                     // Store the connection and side information
                     attachmentConnections[item] = gameObject;
                     itemToSideMap[item] = side;
@@ -303,6 +298,9 @@ public class AttachmentHandler : MonoBehaviour
 
         // Perform the attachment
         AttachItem(item, attachPosition, packageList, side);
+        
+        // Play attach audio on success
+        oneSounds.PlayAttachAudio();
 
         // Track the connection and side
         if (connectedTo != null)
@@ -743,6 +741,9 @@ public class AttachmentHandler : MonoBehaviour
         {
             col.enabled = true;
         }
+
+        // Play detach audio
+        oneSounds.PlayDetachAudio();
     }
 
     private void DrawDebugBounds(Bounds bounds, Color color)

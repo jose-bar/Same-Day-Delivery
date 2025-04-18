@@ -1164,13 +1164,6 @@ public class RobotController : MonoBehaviour
         }
     }
 
-    IEnumerator ScaleTimer() {
-        yield return new WaitForSeconds(3f);
-        List<GameObject> attachedItems = attachmentHandler.GetAllAttachedItems();
-        int weight = attachedItems.Count;
-        Debug.Log(weight);
-    }
-
     void OnCollisionEnter2D(Collision2D collision)
     {        
         if (collision.gameObject.CompareTag(AttachmentHandler.ATTACHMENT_COLLIDER_TAG))
@@ -1184,23 +1177,6 @@ public class RobotController : MonoBehaviour
             {
                 oneSounds.PlayBumpAudio();
             }
-        }
-
-        // Starts timer on contact with scale
-        if (collision.gameObject.name == "Scale") {
-            StartCoroutine("ScaleTimer");
-            oneSounds.PlayScaleStepAudio();
-            oneSounds.PlayScaleAudio();
-        }
-    }
-
-    void OnCollisionExit2D(Collision2D collision)
-    {
-        // Ends timer when leaving scale
-        if (collision.gameObject.name == "Scale") {
-            StopCoroutine("ScaleTimer");
-            oneSounds.PlayFailAudio();
-            oneSounds.StopAudio1();
         }
     }
 
