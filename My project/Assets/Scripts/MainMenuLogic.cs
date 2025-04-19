@@ -14,7 +14,7 @@ public class MainMenuLogic : MonoBehaviour
 
     public void StartGame(){
         musicPlayer.StopAudio();
-        SceneManager.LoadScene("TestLevel");
+        SceneManager.LoadScene("Spring");
     }
 
     public void QuitGame(){

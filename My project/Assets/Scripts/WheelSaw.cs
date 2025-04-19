@@ -116,7 +116,7 @@ public class WheelSpike : MonoBehaviour
         }
 
         // 4) Play ambient saw audio
-        sawSounds.PlayAudio();
+        //sawSounds.PlayAudio();
     }
 
     void UpdateTargetPosition()
