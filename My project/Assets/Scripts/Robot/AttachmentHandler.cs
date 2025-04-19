@@ -249,8 +249,7 @@ public class AttachmentHandler : MonoBehaviour
             return;
         }
 
-        // Find what this item will be connected to and which side it belongs to
-        GameObject connectedTo = FindConnectedItem(attachPosition);
+        // First determine which side we're attaching to
         AttachmentSide side = DetermineSideFromPosition(attachPosition);
 
         // Check if we've reached the maximum attachments for this side
@@ -268,7 +267,17 @@ public class AttachmentHandler : MonoBehaviour
             return;
         }
 
-        if (connectedTo == null && Vector2.Distance(attachPosition, transform.position) > validAttachDistance)
+        // Find what this item will be connected to, prioritizing the same side
+        GameObject connectedTo = FindConnectedItemOnSide(attachPosition, side);
+
+        // If nothing on the same side, try the general find method
+        if (connectedTo == null)
+        {
+            connectedTo = FindConnectedItem(attachPosition);
+        }
+
+        // Check if this position is valid for connection
+        if (connectedTo == null)
         {
             Debug.LogWarning("Item must be connected to robot or another attached item");
 
@@ -298,9 +307,12 @@ public class AttachmentHandler : MonoBehaviour
 
         // Perform the attachment
         AttachItem(item, attachPosition, packageList, side);
-        
+
         // Play attach audio on success
-        oneSounds.PlayAttachAudio();
+        if (oneSounds != null)
+        {
+            oneSounds.PlayAttachAudio();
+        }
 
         // Track the connection and side
         if (connectedTo != null)
@@ -325,6 +337,59 @@ public class AttachmentHandler : MonoBehaviour
 
         StartCoroutine(AttachCooldown());
     }
+
+
+    public GameObject FindConnectedItemOnSide(Vector2 position, AttachmentSide side)
+    {
+        // Get all items on this specific side
+        List<GameObject> sideItems = GetPackageList(side);
+
+        GameObject closestItem = null;
+        float closestDistance = validAttachDistance;
+
+        // Find the closest item on this side
+        foreach (GameObject item in sideItems)
+        {
+            float distance = Vector2.Distance(position, item.transform.position);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                closestItem = item;
+            }
+        }
+
+        // If no items on this side are close enough, check the appropriate attachment point
+        if (closestItem == null)
+        {
+            // Get the attachment point for this side
+            Transform attachPoint = null;
+            switch (side)
+            {
+                case AttachmentSide.Right:
+                    attachPoint = rightAttachPoint;
+                    break;
+                case AttachmentSide.Left:
+                    attachPoint = leftAttachPoint;
+                    break;
+                case AttachmentSide.Top:
+                    attachPoint = topAttachPoint;
+                    break;
+            }
+
+            if (attachPoint != null)
+            {
+                float distance = Vector2.Distance(position, attachPoint.position);
+                if (distance < validAttachDistance)
+                {
+                    // Return the robot itself when connecting to an attachment point
+                    return gameObject;
+                }
+            }
+        }
+
+        return closestItem;
+    }
+
 
     // Check if attaching would cause excessive overlap with robot or other packages
     private bool WouldCauseExcessiveOverlap(GameObject item, Vector2 position, AttachmentSide side)
@@ -938,12 +1003,16 @@ public class AttachmentHandler : MonoBehaviour
     // Check if a position is valid for attachment
     public bool IsValidAttachmentPosition(Vector2 position, GameObject item)
     {
-        // Check if connected to robot or another package
-        bool isConnected = IsConnectedToRobotOrPackage(position);
+        // Determine which side we're trying to attach to
+        AttachmentSide side = DetermineSideFromPosition(position);
+
+        // Check if connected to an item on the same side or the appropriate attachment point
+        GameObject connectedTo = FindConnectedItemOnSide(position, side);
+        bool isConnected = connectedTo != null;
 
         // Check for collisions and excessive overlap
-        bool wouldCollide = WouldCollideAtPosition(item, position, AttachmentSide.Custom);
-        bool wouldOverlap = WouldCauseExcessiveOverlap(item, position, AttachmentSide.Custom);
+        bool wouldCollide = WouldCollideAtPosition(item, position, side);
+        bool wouldOverlap = WouldCauseExcessiveOverlap(item, position, side);
 
         return isConnected && !wouldCollide && !wouldOverlap;
     }
