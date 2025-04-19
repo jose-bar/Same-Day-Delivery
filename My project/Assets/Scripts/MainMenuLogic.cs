@@ -13,8 +13,8 @@ public class MainMenuLogic : MonoBehaviour
     } 
 
     public void StartGame(){
+        SceneManager.LoadScene("LevelSectionMenu");
         musicPlayer.StopAudio();
-        SceneManager.LoadScene("Spring");
     }
 
     public void QuitGame(){

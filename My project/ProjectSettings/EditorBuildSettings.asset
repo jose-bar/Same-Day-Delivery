@@ -9,7 +9,19 @@ EditorBuildSettings:
     path: Assets/Scenes/MainMenu.unity
     guid: b1d6686f9baaa9f4986ecbdc528432fa
   - enabled: 1
-    path: Assets/Scenes/Spring.unity
+    path: Assets/Scenes/LevelSectionMenu.unity
+    guid: d4055b58fb6473f479442d96edf99df7
+  - enabled: 1
+    path: Assets/Scenes/Level1.unity
+    guid: fa66ce4cb87604b9c9d1e8d829054bc0
+  - enabled: 1
+    path: Assets/Scenes/Level2.unity
     guid: 8289e5f59b3fe4cdab3abde603b2af28
+  - enabled: 1
+    path: Assets/Scenes/Level3.unity
+    guid: 3e722ff5640a744638e7b2ea90acbe94
+  - enabled: 1
+    path: Assets/Scenes/Level4.unity
+    guid: b44aa8359517b436bb1fa1bf449d77ea
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0
