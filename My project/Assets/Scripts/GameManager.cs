@@ -1,58 +1,67 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+[RequireComponent(typeof(MusicPlayer))]
 public class GameManager : MonoBehaviour
 {
-    private MusicPlayer musicPlayer;
     public static GameManager Instance { get; private set; }
+
     [Tooltip("Drag in your Player prefab here")]
     public GameObject playerPrefab;
 
-    private void Start()
-    {
-        musicPlayer = GetComponent<MusicPlayer>();
-        musicPlayer.PlayAudio();
-    }
+    private MusicPlayer musicPlayer;
 
     private void Awake()
     {
-        // singleton pattern
+        // Singleton pattern
         if (Instance == null)
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
-            SceneManager.sceneLoaded += OnSceneLoaded;
         }
-        else Destroy(gameObject);
+        else
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        // Cache the MusicPlayer component
+        musicPlayer = GetComponent<MusicPlayer>();
+        if (musicPlayer == null)
+            Debug.LogError("[GameManager] Missing MusicPlayer component on GameManager!");
+
+        // Subscribe to scene‐loaded events
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void Start()
+    {
+        // Begin playback immediately
+        if (musicPlayer != null)
+            musicPlayer.PlayAudio();
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // only spawn in your actual level scenes
-        if (!scene.name.StartsWith("L")) {
-            if (scene.name.StartsWith("M")) {
+        if (musicPlayer != null)
+        {
+            // If we're in a menu (scene names starting with "M"), resume BGM
+            if (scene.name.StartsWith("M"))
+            {
                 musicPlayer.ResumeAudio();
             }
-            return;
+            // If we're in a level (scene names starting with "L"), stop BGM
+            else if (scene.name.StartsWith("L"))
+            {
+                musicPlayer.StopAudio();
+            }
         }
-        else {
-            musicPlayer.StopAudio();
-        }
-
-        // find the spawn point
-        // var spawn = GameObject.FindWithTag("PlayerSpawn");
-        // if (spawn == null)
-        // {
-        //     Debug.LogError("No PlayerSpawn found in scene " + scene.name);
-        //     return;
-        // }
-
-        // instantiate the player prefab at that position
-        //Instantiate(playerPrefab, spawn.transform.position, Quaternion.identity);
     }
 
     private void OnDestroy()
     {
-        SceneManager.sceneLoaded -= OnSceneLoaded;
+        // Unsubscribe when this instance is destroyed
+        if (Instance == this)
+            SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 }
