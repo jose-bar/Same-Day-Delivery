@@ -7,7 +7,7 @@ public class OneSoundEffects : MonoBehaviour
 {
     public AudioSource src1, src2, src3, src4, src5;
     public AudioClip jumpSfx, bumpSfx, crouchSfx, steamSfx, stepSfx, failSfx,
-            scaleSfx, attachSfx, detachSfx;
+            scaleSfx, attachSfx, detachSfx, deathSfx;
     // Checks for when audio was playing then paused
     public Boolean paused1, paused2, paused3, paused4, paused5;
 
@@ -57,6 +57,11 @@ public class OneSoundEffects : MonoBehaviour
     public void PlayDetachAudio() {
         src5.clip = detachSfx;
         src5.Play();
+    }
+
+    public void PlayDeathAudio() {
+        src1.clip = deathSfx;
+        src1.Play();
     }
 
     public void StopAudio1() {

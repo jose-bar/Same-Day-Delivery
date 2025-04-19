@@ -36,6 +36,9 @@ public class WheelSpike : MonoBehaviour
     // Target position
     private Vector2 _target;
 
+    // Sound Effects
+    private ObjectSoundEffects sawSounds;
+
     // Starting position
     private Vector2 _startPosition;
 
@@ -47,6 +50,9 @@ public class WheelSpike : MonoBehaviour
 
     void Start()
     {
+        // Init sound
+        sawSounds = GetComponent<ObjectSoundEffects>();
+
         // Record initial position
         _startPosition = transform.position;
 
@@ -108,6 +114,9 @@ public class WheelSpike : MonoBehaviour
             // Set new target based on movement type
             UpdateTargetPosition();
         }
+
+        // 4) Play ambient saw audio
+        sawSounds.PlayAudio();
     }
 
     void UpdateTargetPosition()
