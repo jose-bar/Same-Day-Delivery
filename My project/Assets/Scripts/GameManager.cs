@@ -3,9 +3,16 @@ using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
+    private MusicPlayer musicPlayer;
     public static GameManager Instance { get; private set; }
     [Tooltip("Drag in your Player prefab here")]
     public GameObject playerPrefab;
+
+    private void Start()
+    {
+        musicPlayer = GetComponent<MusicPlayer>();
+        musicPlayer.PlayAudio();
+    }
 
     private void Awake()
     {
@@ -22,7 +29,15 @@ public class GameManager : MonoBehaviour
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         // only spawn in your actual level scenes
-        if (!scene.name.StartsWith("0")) return;
+        if (!scene.name.StartsWith("L")) {
+            if (scene.name.StartsWith("M")) {
+                musicPlayer.ResumeAudio();
+            }
+            return;
+        }
+        else {
+            musicPlayer.StopAudio();
+        }
 
         // find the spawn point
         // var spawn = GameObject.FindWithTag("PlayerSpawn");

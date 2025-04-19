@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 502329058372288157}
   - component: {fileID: 3884848953978736060}
   - component: {fileID: 1200984941302826638}
-  - component: {fileID: 3900637142254309936}
+  - component: {fileID: 2721216356798632670}
   m_Layer: 0
   m_Name: WheelSaw
   m_TagString: Untagged
@@ -187,7 +187,7 @@ AudioSource:
   m_PlayOnAwake: 0
   m_Volume: 1
   m_Pitch: 1
-  Loop: 0
+  Loop: 1
   Mute: 0
   Spatialize: 0
   SpatializePostEffects: 0
@@ -229,7 +229,7 @@ AudioSource:
     m_Curve:
     - serializedVersion: 3
       time: 0
-      value: 0
+      value: 1
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -269,7 +269,7 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
---- !u!114 &3900637142254309936
+--- !u!114 &2721216356798632670
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -278,8 +278,8 @@ MonoBehaviour:
   m_GameObject: {fileID: 7943972677964294711}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2d464830b5114c347a181d12f6c12785, type: 3}
+  m_Script: {fileID: 11500000, guid: be7041dc1c177b14686dd612ed47f785, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  src: {fileID: 0}
-  wheelSfx: {fileID: 0}
+  src: {fileID: 1200984941302826638}
+  sfx: {fileID: 8300000, guid: 5cc9571742d8aed4e882575655401a18, type: 3}

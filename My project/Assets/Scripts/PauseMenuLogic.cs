@@ -14,7 +14,7 @@ public class PauseMenuLogic : MonoBehaviour
 
     LoopSoundEffects loopSounds;
 
-    ObjectSoundEffects sawSounds;
+    MusicPlayer musicPlayer;
 
     public BGMSceneManager bgmSceneManager;
 
@@ -25,6 +25,8 @@ public class PauseMenuLogic : MonoBehaviour
       robot = GameObject.FindWithTag("Player");
       loopSounds = robot.GetComponent<LoopSoundEffects>();
       oneSounds = robot.GetComponent<OneSoundEffects>();
+      musicPlayer = GetComponent<MusicPlayer>();
+      musicPlayer.PlayAudio();
     }
 
     // Update is called once per frame
@@ -49,6 +51,7 @@ public class PauseMenuLogic : MonoBehaviour
         
         loopSounds.PauseAudio();
         oneSounds.PauseAllAudio();
+        musicPlayer.PauseAudio();
         foreach (GameObject obj in GameObject.FindGameObjectsWithTag("Noisy")) {
             obj.GetComponent<ObjectSoundEffects>().PauseAudio();
         }
@@ -61,6 +64,7 @@ public class PauseMenuLogic : MonoBehaviour
 
         loopSounds.ResumeAudio();
         oneSounds.ResumeAllAudio();
+        musicPlayer.ResumeAudio();
         foreach (GameObject obj in GameObject.FindGameObjectsWithTag("Noisy")) {
             obj.GetComponent<ObjectSoundEffects>().ResumeAudio();
         }
@@ -69,10 +73,13 @@ public class PauseMenuLogic : MonoBehaviour
     public void RetryLevel(){
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        musicPlayer.PlayAudio();
+        paused = false;
     }
 
     public void ExitToMenu(){
         Time.timeScale = 1f;
         SceneManager.LoadScene("MainMenu");
+        paused = false;
     }
 }

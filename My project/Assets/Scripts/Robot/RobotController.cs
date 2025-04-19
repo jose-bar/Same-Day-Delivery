@@ -221,6 +221,7 @@ public class RobotController : MonoBehaviour
         foreach (GameObject obj in GameObject.FindGameObjectsWithTag("Noisy")) {
             obj.GetComponent<ObjectSoundEffects>().PauseAudio();
         }
+        GameObject.Find("MenuScreenCanvas").GetComponent<MusicPlayer>().PauseAudio();
         
         // 2. Detach & enable physics on children
         foreach (Transform child in transform)
