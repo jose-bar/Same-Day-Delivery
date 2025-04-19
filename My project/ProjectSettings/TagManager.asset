@@ -6,11 +6,12 @@ TagManager:
   tags:
   - AttachmentCollider
   - ProxyCollider
+  - Package
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - Player
   - Water
   - UI
   - Package
