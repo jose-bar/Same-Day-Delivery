@@ -1,13 +1,10 @@
 fileFormatVersion: 2
-guid: 66e7e5bb1afa3fc409fcf5697d65685f
+guid: d1a35843c69bb084787e62ec1442337a
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 6385376538676848507
-    second: START QUIT_0
-  - first:
-      213: 397446965752235507
-    second: START QUIT_1
+      213: 7547837145318610241
+    second: PAUSED (1)_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -116,35 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: START QUIT_0
-      rect:
-        serializedVersion: 2
-        x: 0
-        y: 163
-        width: 369
-        height: 108
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: b7762f8712a6d9850800000000000000
-      internalID: 6385376538676848507
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: START QUIT_1
+      name: PAUSED (1)_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 282
-        height: 128
+        width: 439
+        height: 98
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -153,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 3f508bad8e3048500800000000000000
-      internalID: 397446965752235507
+      spriteID: 145d63db4ed4fb860800000000000000
+      internalID: 7547837145318610241
       vertices: []
       indices: 
       edges: []

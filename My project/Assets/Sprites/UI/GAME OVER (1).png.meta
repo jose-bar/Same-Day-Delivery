@@ -1,16 +1,13 @@
 fileFormatVersion: 2
-guid: 199a0076b03f9dd4d9cd8483796be242
+guid: ccc8d61dd0885eb4ca2101f57464cbfc
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 3519552562108702619
-    second: Same Day Delivery (1)_0
+      213: 4886547166628881360
+    second: GAME OVER (1)_0
   - first:
-      213: -4604399900145873138
-    second: Same Day Delivery (1)_1
-  - first:
-      213: -572027788384145461
-    second: Same Day Delivery (1)_2
+      213: 8568512283963157836
+    second: GAME OVER (1)_1
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -43,7 +40,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 1
+    filterMode: 0
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -52,7 +49,7 @@ TextureImporter:
   nPOTScale: 0
   lightmap: 0
   compressionQuality: 50
-  spriteMode: 2
+  spriteMode: 1
   spriteExtrude: 1
   spriteMeshType: 1
   alignment: 0
@@ -81,7 +78,7 @@ TextureImporter:
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
-    textureCompression: 1
+    textureCompression: 0
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
@@ -119,57 +116,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Same Day Delivery (1)_0
+      name: GAME OVER (1)_0
       rect:
         serializedVersion: 2
         x: 0
-        y: 143
-        width: 336
-        height: 138
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: b9f1ec86866f7d030800000000000000
-      internalID: 3519552562108702619
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Same Day Delivery (1)_1
-      rect:
-        serializedVersion: 2
-        x: 330
-        y: 200
-        width: 249
-        height: 124
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: e0f06fb9fa2e910c0800000000000000
-      internalID: -4604399900145873138
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Same Day Delivery (1)_2
-      rect:
-        serializedVersion: 2
-        x: 23
         y: 0
-        width: 511
-        height: 171
+        width: 320
+        height: 98
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -178,8 +131,30 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: bcfe5b7d1cfbf08f0800000000000000
-      internalID: -572027788384145461
+      spriteID: 0d32b1d02c080d340800000000000000
+      internalID: 4886547166628881360
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GAME OVER (1)_1
+      rect:
+        serializedVersion: 2
+        x: 336
+        y: 0
+        width: 298
+        height: 98
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c4de13b368879e670800000000000000
+      internalID: 8568512283963157836
       vertices: []
       indices: 
       edges: []
@@ -188,7 +163,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 5e97eb03825dee720800000000000000
     internalID: 0
     vertices: []
     indices: 
@@ -197,7 +172,9 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      GAME OVER (1)_0: 4886547166628881360
+      GAME OVER (1)_1: 8568512283963157836
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

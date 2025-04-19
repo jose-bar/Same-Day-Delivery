@@ -13,7 +13,7 @@ public class MainMenuLogic : MonoBehaviour
     } 
 
     public void StartGame(){
-        SceneManager.LoadScene("SelectLevel");
+        SceneManager.LoadScene("LevelSectionMenu");
         musicPlayer.StopAudio();
     }
 

@@ -22,18 +22,18 @@ public class GameManager : MonoBehaviour
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         // only spawn in your actual level scenes
-        if (!scene.name.StartsWith("Level")) return;
+        if (!scene.name.StartsWith("0")) return;
 
         // find the spawn point
-        var spawn = GameObject.FindWithTag("PlayerSpawn");
-        if (spawn == null)
-        {
-            Debug.LogError("No PlayerSpawn found in scene " + scene.name);
-            return;
-        }
+        // var spawn = GameObject.FindWithTag("PlayerSpawn");
+        // if (spawn == null)
+        // {
+        //     Debug.LogError("No PlayerSpawn found in scene " + scene.name);
+        //     return;
+        // }
 
         // instantiate the player prefab at that position
-        Instantiate(playerPrefab, spawn.transform.position, Quaternion.identity);
+        //Instantiate(playerPrefab, spawn.transform.position, Quaternion.identity);
     }
 
     private void OnDestroy()
