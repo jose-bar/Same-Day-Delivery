@@ -15,8 +15,14 @@ public class WheelSpike : MonoBehaviour
     private float _rightX;
     private Vector2 _target;
 
+    // Sound Effects
+    private ObjectSoundEffects sawSounds;
+
     void Start()
     {
+        // Init sound
+        sawSounds = GetComponent<ObjectSoundEffects>();
+        
         // Record initial X, set left/right bounds
         float startX = transform.position.x;
         _leftX  = startX - patrolDistance;
@@ -44,6 +50,9 @@ public class WheelSpike : MonoBehaviour
             else
                 _target.x = _rightX;
         }
+
+        // 4) Play ambient saw audio
+        sawSounds.PlayAudio();
     }
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -54,6 +63,7 @@ public class WheelSpike : MonoBehaviour
             
             // Destroy that GameObject
             Destroy(other.gameObject);
+
         }else if(other.CompareTag("Player")){
             RobotController player = other.GetComponent<RobotController>();
             if (player != null)

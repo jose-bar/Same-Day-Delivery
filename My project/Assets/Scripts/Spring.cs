@@ -54,7 +54,12 @@ public class Spring : MonoBehaviour
     private bool isCompressed = false;
     private bool isCoolingDown = false;
     private float targetCompression = 0f;
+
+    // Legacy sound
     private AudioSource audioSource;
+
+    // Sound effects
+    private ObjectSoundEffects springSounds;
 
     // Cached player reference
     private RobotController playerRobot;
@@ -75,7 +80,7 @@ public class Spring : MonoBehaviour
         originalCoilPosition = springCoil.localPosition;
         originalCoilScale = springCoil.localScale;
 
-        // Setup audio
+        // [legacy] Setup audio
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null && springSound != null)
         {
@@ -84,6 +89,9 @@ public class Spring : MonoBehaviour
             audioSource.spatialBlend = 1.0f; // 3D sound
             audioSource.volume = 0.7f;
         }
+
+        // New audio setup
+        springSounds = GetComponent<ObjectSoundEffects>();
 
         // Add collider if none exists
         BoxCollider2D collider = GetComponent<BoxCollider2D>();
@@ -196,6 +204,9 @@ public class Spring : MonoBehaviour
 
                 // Start spring compression
                 StartCoroutine(CompressAndBounce());
+
+                // Play sound
+                springSounds.PlayAudio();
             }
         }
     }

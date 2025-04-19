@@ -14,6 +14,8 @@ public class PauseMenuLogic : MonoBehaviour
 
     LoopSoundEffects loopSounds;
 
+    ObjectSoundEffects sawSounds;
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -45,6 +47,9 @@ public class PauseMenuLogic : MonoBehaviour
         
         loopSounds.PauseAudio();
         oneSounds.PauseAllAudio();
+        foreach (GameObject obj in GameObject.FindGameObjectsWithTag("Noisy")) {
+            obj.GetComponent<ObjectSoundEffects>().PauseAudio();
+        }
     }
 
     public void ResumeGame(){
@@ -54,6 +59,9 @@ public class PauseMenuLogic : MonoBehaviour
 
         loopSounds.ResumeAudio();
         oneSounds.ResumeAllAudio();
+        foreach (GameObject obj in GameObject.FindGameObjectsWithTag("Noisy")) {
+            obj.GetComponent<ObjectSoundEffects>().ResumeAudio();
+        }
     }
 
     public void RetryLevel(){
