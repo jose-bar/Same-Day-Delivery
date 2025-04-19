@@ -1,10 +1,16 @@
 fileFormatVersion: 2
-guid: af70db66c9fef4b41944f0ad63b482e7
+guid: 5b269d2630a210e40b8ed60721c42763
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -8035275806975702836
-    second: homepage_0
+      213: -2646012700439789215
+    second: Same Day Delivery_0
+  - first:
+      213: -1661279781943073650
+    second: Same Day Delivery_1
+  - first:
+      213: -1700826336411130559
+    second: Same Day Delivery_2
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -37,7 +43,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 1
+    filterMode: 0
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -113,13 +119,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: homepage_0
+      name: Same Day Delivery_0
       rect:
         serializedVersion: 2
         x: 0
-        y: 0
-        width: 1459
-        height: 821
+        y: 143
+        width: 319
+        height: 122
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +134,52 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: cc84cece937fc7090800000000000000
-      internalID: -8035275806975702836
+      spriteID: 1614d17d779774bd0800000000000000
+      internalID: -2646012700439789215
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Same Day Delivery_1
+      rect:
+        serializedVersion: 2
+        x: 330
+        y: 200
+        width: 232
+        height: 108
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e84aeb417d2f1f8e0800000000000000
+      internalID: -1661279781943073650
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Same Day Delivery_2
+      rect:
+        serializedVersion: 2
+        x: 23
+        y: 0
+        width: 495
+        height: 155
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 145e59955737568e0800000000000000
+      internalID: -1700826336411130559
       vertices: []
       indices: 
       edges: []
@@ -148,7 +198,9 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      homepage_0: -8035275806975702836
+      Same Day Delivery_0: -2646012700439789215
+      Same Day Delivery_1: -1661279781943073650
+      Same Day Delivery_2: -1700826336411130559
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
