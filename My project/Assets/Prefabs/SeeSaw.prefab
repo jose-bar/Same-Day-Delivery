@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6421956499211203524}
   - component: {fileID: 2283156001973065345}
+  - component: {fileID: 8434201683404976787}
   m_Layer: 0
   m_Name: SeeSawCenter
   m_TagString: Untagged
@@ -87,6 +88,33 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
+--- !u!50 &8434201683404976787
+Rigidbody2D:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1821572341406448713}
+  m_BodyType: 2
+  m_Simulated: 1
+  m_UseFullKinematicContacts: 0
+  m_UseAutoMass: 0
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_GravityScale: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_Interpolate: 0
+  m_SleepingMode: 1
+  m_CollisionDetection: 0
+  m_Constraints: 0
 --- !u!1 &4048676130595505133
 GameObject:
   m_ObjectHideFlags: 0
@@ -243,9 +271,9 @@ BoxCollider2D:
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
   m_SpriteTilingProperty:
-    border: {x: 0, y: 0, z: 0, w: 0}
+    border: {x: 0, y: 0.02, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1.92, y: 0.21}
+    oldSize: {x: 1.91, y: 0.18}
     newSize: {x: 1.92, y: 0.21}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -263,13 +291,13 @@ HingeJoint2D:
   m_Enabled: 1
   serializedVersion: 4
   m_EnableCollision: 0
-  m_ConnectedRigidBody: {fileID: 0}
+  m_ConnectedRigidBody: {fileID: 8434201683404976787}
   m_BreakForce: Infinity
   m_BreakTorque: Infinity
   m_BreakAction: 3
   m_AutoConfigureConnectedAnchor: 0
   m_Anchor: {x: 0, y: 0}
-  m_ConnectedAnchor: {x: 20.853699, y: -0.22999999}
+  m_ConnectedAnchor: {x: -0.009301662, y: 0.11628147}
   m_UseConnectedAnchor: 1
   m_UseMotor: 0
   m_Motor:
@@ -477,7 +505,7 @@ Transform:
   m_GameObject: {fileID: 7948406584191380366}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 21.138302, y: 0.03, z: 1.4590715}
+  m_LocalPosition: {x: 13.474293, y: -0.9846277, z: 1.4590715}
   m_LocalScale: {x: 2, y: 2, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children:
