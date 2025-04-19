@@ -4,7 +4,7 @@ using UnityEngine.SceneManagement;
 public class MainMenuLogic : MonoBehaviour
 {
     public void StartGame(){
-        SceneManager.LoadScene("TestLevel");
+        SceneManager.LoadScene("SelectLevel");
     }
 
     public void QuitGame(){
