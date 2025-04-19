@@ -7,7 +7,7 @@ public class LevelLoader : MonoBehaviour
     // the scene name or its build‑index.
     public void LoadByName(string sceneName)
     {
-        SceneManager.LoadScene(sceneName);
+        SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
     }
 
     public void LoadByIndex(int sceneIndex)

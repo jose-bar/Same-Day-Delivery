@@ -16,76 +16,108 @@ public class Scale : MonoBehaviour
     public Sprite passSprite;
     public Sprite failSprite;
 
-    private SpriteRenderer screenRenderer;
-    private WeightManager   weightManager;
-    private OneSoundEffects oneSounds;
-    private bool LevelPassed = false; 
+    private SpriteRenderer   screenRenderer;
+    private WeightManager    weightManager;
+    private OneSoundEffects  oneSounds;
+    private Coroutine        scaleRoutine;
+    private bool             levelPassed = false;
 
     private void Awake()
     {
-        // find the screen child and grab its SpriteRenderer
+        // 1) Grab the little screen SpriteRenderer
         var screenGO = transform.Find(screenChildName);
         if (screenGO == null)
+        {
             Debug.LogError($"[Scale] Could not find child named '{screenChildName}'");
+        }
         else
+        {
             screenRenderer = screenGO.GetComponent<SpriteRenderer>();
+            if (screenRenderer == null)
+                Debug.LogError($"[Scale] '{screenChildName}' has no SpriteRenderer!");
+        }
 
-        // grab components from Player
+        // 2) Find the player in the scene and cache its managers
         var player = GameObject.FindWithTag("Player");
         if (player == null)
-            Debug.LogError("[Scale] Player not found in scene!");
+        {
+            Debug.LogError("[Scale] Player not found in scene! Make sure your Player is tagged \"Player\".");
+        }
         else
         {
             weightManager = player.GetComponent<WeightManager>();
             oneSounds     = player.GetComponent<OneSoundEffects>();
+
+            if (weightManager == null)
+                Debug.LogError("[Scale] Player has no WeightManager component!");
+            if (oneSounds == null)
+                Debug.LogError("[Scale] Player has no OneSoundEffects component!");
         }
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Player"))
-        {
-            StartCoroutine(ScaleTimer());
-            oneSounds.PlayScaleStepAudio();
-            oneSounds.PlayScaleAudio();
-        }
+        if (!collision.gameObject.CompareTag("Player")) return;
+
+        // start our delay
+        if (scaleRoutine == null)
+            scaleRoutine = StartCoroutine(ScaleTimer());
+
+        // play your sounds (null‑safe)
+        oneSounds?.PlayScaleStepAudio();
+        oneSounds?.PlayScaleAudio();
     }
 
     private void OnCollisionExit2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Player"))
+        if (!collision.gameObject.CompareTag("Player")) return;
+
+        // stop exactly our coroutine
+        if (scaleRoutine != null)
         {
-            StopCoroutine(ScaleTimer());
-            oneSounds.PlayScaleStepAudio();
-            oneSounds.StopAudio1();
+            StopCoroutine(scaleRoutine);
+            scaleRoutine = null;
         }
+
+        oneSounds?.PlayScaleStepAudio();
+        oneSounds?.StopAudio1();
     }
 
     private IEnumerator ScaleTimer()
     {
+        // 3s weight‐accumulation delay
         yield return new WaitForSeconds(3f);
 
-        float total = weightManager.GetTotalWeight();
+        // guard null manager
+        float total = (weightManager != null)
+                    ? weightManager.GetTotalWeight()
+                    : 0f;
         Debug.Log($"[Scale] Total weight = {total}");
 
+        // swap the sprite
         if (screenRenderer != null)
         {
-            // swap sprite based on threshold
-            screenRenderer.sprite = (total >= passThreshold)
-                                   ? passSprite
-                                   : failSprite;
-            if (screenRenderer.sprite == passSprite){
-                LevelPassed = true;
-            }
+            bool pass = total >= passThreshold;
+            screenRenderer.sprite = pass ? passSprite : failSprite;
+            levelPassed = pass;
         }
 
+        // give the player a moment to see it
         yield return new WaitForSeconds(1.5f);
-        if(total >= passThreshold && LevelPassed){
+
+        // advance if they passed
+        if (levelPassed)
             ProgressLevel();
-        }
+
+        scaleRoutine = null;
     }
 
-    public void ProgressLevel(){
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
+    private void ProgressLevel()
+    {
+        // default Single mode unloads this scene
+        SceneManager.LoadScene(
+            SceneManager.GetActiveScene().buildIndex + 1,
+            LoadSceneMode.Single
+        );
     }
 }
