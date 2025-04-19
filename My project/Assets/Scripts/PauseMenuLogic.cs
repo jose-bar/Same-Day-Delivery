@@ -74,10 +74,12 @@ public class PauseMenuLogic : MonoBehaviour
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         musicPlayer.PlayAudio();
+        paused = false;
     }
 
     public void ExitToMenu(){
         Time.timeScale = 1f;
         SceneManager.LoadScene("MainMenu");
+        paused = false;
     }
 }

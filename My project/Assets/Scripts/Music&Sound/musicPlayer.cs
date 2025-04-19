@@ -19,6 +19,7 @@ public class MusicPlayer : MonoBehaviour
 
     public void StopAudio() {
         src.Stop();
+        pausedAudio = true;
     }
 
     public void PauseAudio() {

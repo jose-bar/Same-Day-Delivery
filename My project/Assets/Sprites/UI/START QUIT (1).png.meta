@@ -172,7 +172,9 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      "START\LQUIT (1)_0": 4358452034262829485
+      "START\LQUIT (1)_1": 180445817748238794
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
