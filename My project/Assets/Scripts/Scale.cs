@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class Scale : MonoBehaviour
 {
@@ -18,6 +19,7 @@ public class Scale : MonoBehaviour
     private SpriteRenderer screenRenderer;
     private WeightManager   weightManager;
     private OneSoundEffects oneSounds;
+    private bool LevelPassed = false; 
 
     private void Awake()
     {
@@ -72,6 +74,18 @@ public class Scale : MonoBehaviour
             screenRenderer.sprite = (total >= passThreshold)
                                    ? passSprite
                                    : failSprite;
+            if (screenRenderer.sprite == passSprite){
+                LevelPassed = true;
+            }
         }
+
+        yield return new WaitForSeconds(1.5f);
+        if(total >= passThreshold && LevelPassed){
+            ProgressLevel();
+        }
+    }
+
+    public void ProgressLevel(){
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
     }
 }
