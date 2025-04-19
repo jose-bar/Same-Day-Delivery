@@ -102,6 +102,6 @@ public class Scale : MonoBehaviour
     private void ProgressLevel()
     {
         // Load your Level-Select scene by name
-        SceneManager.LoadScene("SelectLevel", LoadSceneMode.Single);
+        SceneManager.LoadScene("SelectLevelMenu", LoadSceneMode.Single);
     }
 }
