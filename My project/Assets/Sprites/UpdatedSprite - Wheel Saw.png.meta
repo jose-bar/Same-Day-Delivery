@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: af58d233e5c5b454d8913390b98834e0
+guid: de44bbf24deaab24b8fa4eb5c1beee12
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 1806881702655454675
-    second: PackageSprites - Seesaw_0
+      213: -1202569815085736349
+    second: UpdatedSprite - Wheel Saw_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: PackageSprites - Seesaw_0
+      name: UpdatedSprite - Wheel Saw_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 192
-        height: 21
+        width: 105
+        height: 102
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 3dd6ee5d555531910800000000000000
-      internalID: 1806881702655454675
+      spriteID: 36e153aef1d9f4fe0800000000000000
+      internalID: -1202569815085736349
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      PackageSprites - Seesaw_0: 1806881702655454675
+      UpdatedSprite - Wheel Saw_0: -1202569815085736349
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
