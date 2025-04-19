@@ -34,8 +34,10 @@ public class OneSoundEffects : MonoBehaviour
     }
 
     public void PlayScaleStepAudio() {
-        src2.clip = stepSfx;
-        src2.Play();
+         src2.clip = stepSfx;
+        if (!src2.isPlaying) {
+            src2.Play();
+        }
     }
 
     public void PlayFailAudio() {

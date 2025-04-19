@@ -280,7 +280,7 @@ public class Spring : MonoBehaviour
                 StartCoroutine(CompressAndBounce());
 
                 // Play sound
-                springSounds.PlayAudio();
+            //    / springSounds.PlayAudio();
             }
         }
     }

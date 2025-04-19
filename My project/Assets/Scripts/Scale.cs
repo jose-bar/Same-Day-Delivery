@@ -16,15 +16,15 @@ public class Scale : MonoBehaviour
     public Sprite passSprite;
     public Sprite failSprite;
 
-    private SpriteRenderer   screenRenderer;
-    private WeightManager    weightManager;
-    private OneSoundEffects  oneSounds;
-    private Coroutine        scaleRoutine;
-    private bool             levelPassed = false;
+    private SpriteRenderer screenRenderer;
+    private WeightManager  weightManager;
+    private OneSoundEffects oneSounds;
+    private Coroutine       scaleRoutine;
+    private bool            levelPassed = false;
 
     private void Awake()
     {
-        // 1) Grab the little screen SpriteRenderer
+        // grab the screen's SpriteRenderer
         var screenGO = transform.Find(screenChildName);
         if (screenGO == null)
         {
@@ -36,34 +36,22 @@ public class Scale : MonoBehaviour
             if (screenRenderer == null)
                 Debug.LogError($"[Scale] '{screenChildName}' has no SpriteRenderer!");
         }
-
-        // 2) Find the player in the scene and cache its managers
-        var player = GameObject.FindWithTag("Player");
-        if (player == null)
-        {
-            Debug.LogError("[Scale] Player not found in scene! Make sure your Player is tagged \"Player\".");
-        }
-        else
-        {
-            weightManager = player.GetComponent<WeightManager>();
-            oneSounds     = player.GetComponent<OneSoundEffects>();
-
-            if (weightManager == null)
-                Debug.LogError("[Scale] Player has no WeightManager component!");
-            if (oneSounds == null)
-                Debug.LogError("[Scale] Player has no OneSoundEffects component!");
-        }
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
         if (!collision.gameObject.CompareTag("Player")) return;
 
-        // start our delay
+        // grab the player's components on first contact
+        if (weightManager == null)
+            weightManager = collision.gameObject.GetComponent<WeightManager>();
+        if (oneSounds == null)
+            oneSounds     = collision.gameObject.GetComponent<OneSoundEffects>();
+
+        // start the weigh‑in coroutine
         if (scaleRoutine == null)
             scaleRoutine = StartCoroutine(ScaleTimer());
 
-        // play your sounds (null‑safe)
         oneSounds?.PlayScaleStepAudio();
         oneSounds?.PlayScaleAudio();
     }
@@ -72,7 +60,7 @@ public class Scale : MonoBehaviour
     {
         if (!collision.gameObject.CompareTag("Player")) return;
 
-        // stop exactly our coroutine
+        // cancel the weigh‑in if they step off early
         if (scaleRoutine != null)
         {
             StopCoroutine(scaleRoutine);
@@ -85,16 +73,15 @@ public class Scale : MonoBehaviour
 
     private IEnumerator ScaleTimer()
     {
-        // 3s weight‐accumulation delay
+        // wait 3 seconds while the player stands on the scale
         yield return new WaitForSeconds(3f);
 
-        // guard null manager
-        float total = (weightManager != null)
+        float total = weightManager != null
                     ? weightManager.GetTotalWeight()
                     : 0f;
         Debug.Log($"[Scale] Total weight = {total}");
 
-        // swap the sprite
+        // swap to pass/fail sprite
         if (screenRenderer != null)
         {
             bool pass = total >= passThreshold;
@@ -102,10 +89,10 @@ public class Scale : MonoBehaviour
             levelPassed = pass;
         }
 
-        // give the player a moment to see it
+        // show the result for 1.5 seconds
         yield return new WaitForSeconds(1.5f);
 
-        // advance if they passed
+        // if they passed, go back to Level‑Select
         if (levelPassed)
             ProgressLevel();
 
@@ -114,10 +101,7 @@ public class Scale : MonoBehaviour
 
     private void ProgressLevel()
     {
-        // default Single mode unloads this scene
-        SceneManager.LoadScene(
-            SceneManager.GetActiveScene().buildIndex + 1,
-            LoadSceneMode.Single
-        );
+        // Load your Level-Select scene by name
+        SceneManager.LoadScene("SelectLevel", LoadSceneMode.Single);
     }
 }
