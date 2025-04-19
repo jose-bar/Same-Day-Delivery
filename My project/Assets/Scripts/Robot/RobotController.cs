@@ -216,7 +216,13 @@ public class RobotController : MonoBehaviour
 
      public void Die()
     {
-        // 1. Detach & enable physics on children
+        // 1. Play death audio and stop other audio
+        oneSounds.PlayDeathAudio();
+        foreach (GameObject obj in GameObject.FindGameObjectsWithTag("Noisy")) {
+            obj.GetComponent<ObjectSoundEffects>().PauseAudio();
+        }
+        
+        // 2. Detach & enable physics on children
         foreach (Transform child in transform)
         {
             var rb = child.GetComponent<Rigidbody2D>();
@@ -229,7 +235,7 @@ public class RobotController : MonoBehaviour
             child.SetParent(null);
         }
 
-        // 2. Swap head sprite immediately
+        // 3. Swap head sprite immediately
         var head = transform.Find("HeadSprite");
         if (head != null)
         {
@@ -238,10 +244,10 @@ public class RobotController : MonoBehaviour
                 sr.sprite = brokenHeadSprite;
         }
 
-        // 3. Stop player control
+        // 4. Stop player control
         this.enabled = false;
 
-        // 4. Schedule the UI+pause after a delay
+        // 5. Schedule the UI+pause after a delay
         Invoke(nameof(ShowGameOver), deathDelay);
     }
 
