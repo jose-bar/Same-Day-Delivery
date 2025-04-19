@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class musicPlayer : MonoBehaviour
+public class MusicPlayer : MonoBehaviour
 {
     private Boolean pausedAudio = false;
     
@@ -28,5 +28,6 @@ public class musicPlayer : MonoBehaviour
 
     public void ResumeAudio() {
         pausedAudio = false;
+        src.Play();
     }
 }

@@ -4,11 +4,11 @@ using UnityEngine.SceneManagement;
 public class MainMenuLogic : MonoBehaviour
 {
     // Music
-    private musicPlayer musicPlayer;
+    private MusicPlayer musicPlayer;
 
     void Start()
     {
-        musicPlayer = GetComponent<musicPlayer>();
+        musicPlayer = GetComponent<MusicPlayer>();
         musicPlayer.PlayAudio();
     } 
 
