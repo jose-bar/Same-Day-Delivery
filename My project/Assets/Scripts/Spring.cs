@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Spring object that bounces the player with force based on their weight
+/// Spring object that bounces the player and packages with force based on weight
 /// Works with existing art assets organized in a specific hierarchy
 /// </summary>
 public class Spring : MonoBehaviour
 {
     [Header("Spring Properties")]
-    [Tooltip("Base force applied when bouncing the player")]
+    [Tooltip("Base force applied when bouncing objects")]
     public float baseSpringForce = 15f;
 
     [Tooltip("How much the spring compresses visually")]
@@ -31,6 +31,14 @@ public class Spring : MonoBehaviour
 
     [Tooltip("Cooldown time between bounces")]
     public float cooldownTime = 0.5f;
+
+    [Header("Package-Specific Settings")]
+    [Tooltip("Force multiplier for packages compared to the robot")]
+    [Range(0.5f, 2f)]
+    public float packageForceMultiplier = 1.2f;
+
+    [Tooltip("Maximum number of packages that can bounce at once")]
+    public int maxPackagesBounced = 3;
 
     [Header("Art References")]
     [Tooltip("The top platform of the spring")]
@@ -56,9 +64,14 @@ public class Spring : MonoBehaviour
     private float targetCompression = 0f;
     private AudioSource audioSource;
 
-    // Cached player reference
+    // Cached references
     private RobotController playerRobot;
     private WeightManager playerWeightManager;
+
+    // Tracked objects currently on spring
+    private List<Rigidbody2D> objectsOnSpring = new List<Rigidbody2D>();
+    private List<float> objectWeights = new List<float>();
+    private float totalWeightOnSpring = 0f;
 
     void Start()
     {
@@ -166,37 +179,119 @@ public class Spring : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        // Check if it's the player
-        RobotController robot = collision.gameObject.GetComponent<RobotController>();
-        if (robot == null)
+        // Skip if cooling down
+        if (isCoolingDown) return;
+
+        // Make sure the collision is from above
+        bool hitFromAbove = false;
+        for (int i = 0; i < collision.contactCount; i++)
         {
-            // Try to find the robot controller in the parent
-            robot = collision.gameObject.GetComponentInParent<RobotController>();
+            Vector2 normal = collision.GetContact(i).normal;
+            if (Vector2.Dot(normal, Vector2.down) > 0.5f)
+            {
+                hitFromAbove = true;
+                break;
+            }
         }
 
-        if (robot != null && !isCoolingDown)
-        {
-            // Make sure the collision is from above
-            bool hitFromAbove = false;
-            for (int i = 0; i < collision.contactCount; i++)
-            {
-                Vector2 normal = collision.GetContact(i).normal;
-                if (Vector2.Dot(normal, Vector2.down) > 0.5f)
-                {
-                    hitFromAbove = true;
-                    break;
-                }
-            }
+        if (!hitFromAbove) return;
 
-            if (hitFromAbove)
+        // Get the rigidbody from the colliding object
+        Rigidbody2D rb = collision.gameObject.GetComponent<Rigidbody2D>();
+        if (rb == null)
+        {
+            // Try to find the rigidbody in the parent
+            rb = collision.gameObject.GetComponentInParent<Rigidbody2D>();
+        }
+
+        if (rb != null)
+        {
+            // Check if it's the player or a package
+            bool isPlayer = false;
+            float objectWeight = 1f; // Default weight
+
+            // Check for player
+            RobotController robot = rb.GetComponent<RobotController>();
+            if (robot != null)
             {
-                // Store player references
+                isPlayer = true;
                 playerRobot = robot;
                 playerWeightManager = robot.GetComponent<WeightManager>();
 
-                // Start spring compression
+                // Get player weight if available
+                if (playerWeightManager != null)
+                {
+                    objectWeight = playerWeightManager.GetTotalWeight();
+                }
+            }
+            else
+            {
+                // Check if it's a package
+                Package package = rb.GetComponent<Package>();
+                if (package != null)
+                {
+                    objectWeight = package.weight;
+                }
+            }
+
+            // Track this object for bouncing
+            if (!objectsOnSpring.Contains(rb))
+            {
+                objectsOnSpring.Add(rb);
+                objectWeights.Add(objectWeight);
+                totalWeightOnSpring += objectWeight;
+
+                // If too many objects are on the spring, limit it
+                if (objectsOnSpring.Count > maxPackagesBounced)
+                {
+                    // Remove the oldest object (except the player, if present)
+                    int indexToRemove = 0;
+                    if (isPlayer && objectsOnSpring.Count > 1)
+                    {
+                        // Find the first non-player object
+                        for (int i = 0; i < objectsOnSpring.Count; i++)
+                        {
+                            if (objectsOnSpring[i].GetComponent<RobotController>() == null)
+                            {
+                                indexToRemove = i;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Remove the object
+                    totalWeightOnSpring -= objectWeights[indexToRemove];
+                    objectWeights.RemoveAt(indexToRemove);
+                    objectsOnSpring.RemoveAt(indexToRemove);
+                }
+            }
+
+            // Start spring compression if not already compressed
+            if (!isCompressed)
+            {
                 StartCoroutine(CompressAndBounce());
             }
+        }
+    }
+
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        // When an object leaves the spring, remove it from tracking
+        Rigidbody2D rb = collision.gameObject.GetComponent<Rigidbody2D>();
+        if (rb == null)
+        {
+            rb = collision.gameObject.GetComponentInParent<Rigidbody2D>();
+        }
+
+        if (rb != null && objectsOnSpring.Contains(rb))
+        {
+            int index = objectsOnSpring.IndexOf(rb);
+            if (index >= 0 && index < objectWeights.Count)
+            {
+                totalWeightOnSpring -= objectWeights[index];
+                objectWeights.RemoveAt(index);
+            }
+            objectsOnSpring.Remove(rb);
         }
     }
 
@@ -205,20 +300,16 @@ public class Spring : MonoBehaviour
         isCoolingDown = true;
         isCompressed = true;
 
-        // Calculate compression based on weight
-        float weightFactor = 0.5f; // Default weight factor if no weight manager
-
+        // Calculate compression based on total weight
+        float baseWeight = 5f; // Default base weight if no robot
         if (playerWeightManager != null)
         {
-            float totalWeight = playerWeightManager.GetTotalWeight();
-            float baseWeight = playerWeightManager.baseRobotWeight;
-
-            // Calculate how much heavier than base the player is
-            float relativeWeight = totalWeight / baseWeight;
-
-            // More weight = more compression (between 0.2 and 1.0)
-            weightFactor = Mathf.Clamp(relativeWeight - 0.5f, 0.2f, 1.0f);
+            baseWeight = playerWeightManager.baseRobotWeight;
         }
+
+        // Calculate weight factor (0.2 - 1.0)
+        float relativeWeight = Mathf.Clamp01(totalWeightOnSpring / (baseWeight * 2f));
+        float weightFactor = Mathf.Clamp(relativeWeight, 0.2f, 1.0f);
 
         // Set target compression (more weight = more compression)
         targetCompression = weightFactor;
@@ -229,24 +320,92 @@ public class Spring : MonoBehaviour
 
         // Calculate bounce force (inverse relationship with weight)
         float forceMultiplier = Mathf.Lerp(maxForceMultiplier, minForceMultiplier, weightFactor);
-        float bounceForce = baseSpringForce * forceMultiplier;
 
-        // Apply the bounce force
-        if (playerRobot != null && playerRobot.GetComponent<Rigidbody2D>() != null)
+        // Bounce all objects on the spring
+        foreach (Rigidbody2D rb in objectsOnSpring)
         {
-            Rigidbody2D playerRb = playerRobot.GetComponent<Rigidbody2D>();
-            playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, 0); // Zero out vertical velocity
-            playerRb.AddForce(Vector2.up * bounceForce, ForceMode2D.Impulse);
-
-            // Play sound with pitch variation based on force
-            if (audioSource != null && springSound != null)
+            if (rb != null)
             {
-                // Heavier = lower pitch
-                audioSource.pitch = Mathf.Lerp(maxPitch, minPitch, weightFactor);
-                audioSource.clip = springSound;
-                audioSource.Play();
+                // Check if it's the player or a package
+                bool isPackage = rb.GetComponent<Package>() != null;
+
+                // Apply force multiplier for packages if needed
+                float objectMultiplier = isPackage ? packageForceMultiplier : 1f;
+                float finalForce = baseSpringForce * forceMultiplier * objectMultiplier;
+
+                // Reset vertical velocity and apply bounce force
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
+                rb.AddForce(Vector2.up * finalForce, ForceMode2D.Impulse);
             }
         }
+
+        // Play sound with pitch variation based on force
+        if (audioSource != null && springSound != null)
+        {
+            // Heavier = lower pitch
+            audioSource.pitch = Mathf.Lerp(maxPitch, minPitch, weightFactor);
+            audioSource.clip = springSound;
+            audioSource.Play();
+        }
+
+        // Clear the objects list
+        objectsOnSpring.Clear();
+        objectWeights.Clear();
+        totalWeightOnSpring = 0f;
+
+        // End compression
+        isCompressed = false;
+
+        // Wait for cooldown
+        yield return new WaitForSeconds(cooldownTime);
+
+        isCoolingDown = false;
+    }
+
+    // Helper method to manually trigger the spring
+    public void TriggerSpring(float forceMultiplier = 1f)
+    {
+        if (!isCoolingDown)
+        {
+            StartCoroutine(ManuallyTriggerSpring(forceMultiplier));
+        }
+    }
+
+    // Manually trigger the spring with a specified compression and force
+    private IEnumerator ManuallyTriggerSpring(float forceMultiplier)
+    {
+        isCoolingDown = true;
+        isCompressed = true;
+
+        // Set compression amount
+        targetCompression = Mathf.Clamp01(forceMultiplier);
+
+        // Wait for compression to happen visually
+        yield return new WaitForSeconds(0.15f);
+
+        // Bounce all objects on the spring
+        foreach (Rigidbody2D rb in objectsOnSpring)
+        {
+            if (rb != null)
+            {
+                // Reset vertical velocity and apply bounce force
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0);
+                rb.AddForce(Vector2.up * baseSpringForce * forceMultiplier, ForceMode2D.Impulse);
+            }
+        }
+
+        // Play sound
+        if (audioSource != null && springSound != null)
+        {
+            audioSource.pitch = Mathf.Lerp(minPitch, maxPitch, forceMultiplier);
+            audioSource.clip = springSound;
+            audioSource.Play();
+        }
+
+        // Clear the objects list
+        objectsOnSpring.Clear();
+        objectWeights.Clear();
+        totalWeightOnSpring = 0f;
 
         // End compression
         isCompressed = false;
