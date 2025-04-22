@@ -90,7 +90,7 @@ public class Scale : MonoBehaviour
         }
 
         // show the result for 1.5 seconds
-        yield return new WaitForSeconds(1.5f);
+        yield return new WaitForSeconds(0.5f);
 
         // if they passed, go back to Level‑Select
         if (levelPassed)
