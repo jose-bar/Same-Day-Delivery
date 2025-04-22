@@ -698,8 +698,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 9.260641, y: 1.7608874}
-  m_SizeDelta: {x: 12.4798, y: 1.1199}
+  m_AnchoredPosition: {x: 8.973288, y: 1.5599499}
+  m_SizeDelta: {x: 12.4798, y: 3.1199}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &178141839
 MonoBehaviour:
@@ -721,7 +721,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Attach Boxes: E\nPress Arrow Keys to Move around \nDetach: Q\n"
+  m_text: "Attach Boxes: E\nDetach: Q\nPress Arrow Keys to Move around \n\nBox Weight:
+    Red>Yellow>Green\nEach box has weight labels\n"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5d5f6c6db98a60f4ea1974e2d433c630, type: 2}
   m_sharedMaterial: {fileID: -7593501702524961198, guid: 5d5f6c6db98a60f4ea1974e2d433c630, type: 2}
@@ -6479,7 +6480,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'Movement: S D'
+  m_text: 'Movement: A D'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5d5f6c6db98a60f4ea1974e2d433c630, type: 2}
   m_sharedMaterial: {fileID: -7593501702524961198, guid: 5d5f6c6db98a60f4ea1974e2d433c630, type: 2}
